@@ -1,0 +1,54 @@
+# --- Build Artifacts (CMake & JUCE) ---
+build/
+CMakeFiles/
+CTestTestfile.cmake
+installer/
+
+# Object and intermediate files
+*.o
+*.a
+
+# Temporary files
+*.tmp
+*.log
+
+# --- IDE/Editor Files ---
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS generated files
+.DS_Store
+
+# --- AI Agent Directories ---
+.qwen/
+.cursor/
+.claude/
+.continue/
+.hermes/
+.windsurf/
+.copilot/
+.aider/
+.roo/
+.codeium/
+.tabnine/
+.sourcegraph/
+.ghost/
+.kilo/
+
+# --- Editor / Tooling ---
+.vscode/
+.cache/
+compile_commands.json
+cmake-build-*/
+
+# --- Editor swap / backup files ---
+*.swp
+*.swo
+*~
+
+# --- Built plugin bundles at repo root (normally under build/) ---
+*.vst3
+*.component
+*.app
