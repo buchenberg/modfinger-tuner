@@ -34,22 +34,25 @@ Available as **VST3**, **AU**, and a **Standalone** app (macOS).
 ### JUCE (bundled submodule)
 
 JUCE is bundled as a git submodule at `JUCE/` (pinned to JUCE **8.0.12**), so the repo is
-self-contained. Clone with submodules:
+self-contained. A plain clone is enough — **CMake initializes the submodule automatically**
+on first configure whenever `JUCE/` is empty:
 
 ```sh
-git clone --recurse-submodules <repo-url>
+git clone <repo-url>
+cmake -B build          # populates JUCE/ via `git submodule update --init`
 ```
 
-If you already cloned without them, initialize the submodule:
+Prefer to fetch it yourself, or building somewhere git/auto-init isn't available? Use either
+of these instead:
 
 ```sh
+git clone --recurse-submodules <repo-url>   # fetch at clone time
+# or, after a plain clone:
 git submodule update --init --recursive
 ```
 
-> **You usually don't need to.** CMake auto-initializes the submodule on first
-> configure (it runs `git submodule update --init` when `JUCE/` is empty), so even a
-> plain `git clone` works. Disable with `-DMODFINGER_AUTOINIT_SUBMODULES=OFF` (e.g. in CI
-> where you've already fetched it).
+Disable the auto-init with `-DMODFINGER_AUTOINIT_SUBMODULES=OFF` (e.g. CI jobs that fetch
+the submodule explicitly).
 
 `CMakeLists.txt` builds JUCE from the bundled checkout:
 
@@ -175,7 +178,9 @@ Plugin state (parameter values) is saved/restored via the host.
 - **"ad-hoc signature" warnings on macOS** — builds are ad-hoc signed; they run locally but
   are not notarized. Adjust signing in `CMakeLists.txt` (`JUCE_SIGN_INTERNALLY`/notarization)
   for distribution.
-- **CMake can't find JUCE** — ensure the submodule is initialized: `git submodule update --init --recursive` (see *JUCE (bundled submodule)*).
+- **CMake can't find JUCE** — CMake normally initializes the submodule itself; this only
+  happens if auto-init is disabled or git isn't available. Run
+  `git submodule update --init --recursive` (see *JUCE (bundled submodule)*).
 - **`Modfinger Tuner.vst3: No such file` when installing** — artefacts are under
   `build/ModfingerTuner_artefacts/Release/...` with the Makefiles generator; adjust the copy
   path accordingly.
