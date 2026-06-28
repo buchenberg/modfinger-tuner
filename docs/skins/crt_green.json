@@ -1,0 +1,13 @@
+{
+  "name": "CRT Green",
+  "colors": {
+    "background": "0xff0a120a",
+    "panel":      "0xff0f1a0f",
+    "primary":    "0xff33ff33",
+    "secondary":  "0xff22cc22",
+    "muted":      "0xff2a5a2a",
+    "zoneLit":    "0xff66ff66",
+    "zoneIdle":   "0xff0a3a0a",
+    "marker":     "0xff338833"
+  }
+}

@@ -21,7 +21,7 @@ installer/
 # OS generated files
 .DS_Store
 
-# --- AI Agent Directories ---
+# --- AI Agent / LLM Tooling ---
 .qwen/
 .cursor/
 .claude/
@@ -36,6 +36,8 @@ installer/
 .sourcegraph/
 .ghost/
 .kilo/
+AGENTS.md
+kilo.json
 
 # --- Editor / Tooling ---
 .vscode/

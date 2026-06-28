@@ -1,0 +1,13 @@
+{
+  "name": "Nord",
+  "colors": {
+    "background": "0xff2e3440",
+    "panel":      "0xff3b4252",
+    "primary":    "0xff8fbcbb",
+    "secondary":  "0xff81a1c1",
+    "muted":      "0xff4c566a",
+    "zoneLit":    "0xffa3be8c",
+    "zoneIdle":   "0xff4a5a3a",
+    "marker":     "0xff616e88"
+  }
+}
