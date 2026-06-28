@@ -35,6 +35,12 @@ private:
     // Apply a colour skin by parameter index (0 = Dark, 1 = 80s Neon, …).
     void applySkin (int index);
 
+    // Show the in-UI skin selector popup.
+    void showSkinMenu();
+
+    // Push a chosen skin index into the "skin" parameter.
+    void setSkinFromIndex (int index);
+
     // Advance width of a single-line string (replaces deprecated Font::getStringWidthFloat).
     static float textWidth (const juce::Font&, const juce::String&);
 
@@ -43,6 +49,9 @@ private:
 
     // Reference pitch label (click to edit)
     juce::Label referenceLabel_;
+
+    // Skin selector (opens a themed popup; drives the "skin" parameter)
+    juce::TextButton skinButton_;
 
     // Active colour skin (driven by the "skin" parameter).
     TunerPalette palette_ { TunerPalette::eightiesNeon() };

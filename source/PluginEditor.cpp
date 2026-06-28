@@ -40,6 +40,10 @@ ModfingerTunerAudioProcessorEditor::ModfingerTunerAudioProcessorEditor (Modfinge
     referenceLabel_.setText (juce::String (cachedRefHz_, 1) + " Hz", juce::dontSendNotification);
     addAndMakeVisible (referenceLabel_);
 
+    // ── Skin selector button ───────────────────────────────────────
+    skinButton_.onClick = [this] { showSkinMenu(); };
+    addAndMakeVisible (skinButton_);
+
     // Apply the current skin (colours come from the "skin" parameter).
     applySkin (processorRef_.apvts.getRawParameterValue ("skin")->load());
 
@@ -65,6 +69,38 @@ void ModfingerTunerAudioProcessorEditor::applySkin (int index)
     referenceLabel_.setColour (juce::Label::backgroundWhenEditingColourId, palette_.panel);
     referenceLabel_.setColour (juce::Label::outlineWhenEditingColourId,    palette_.primary);
     referenceLabel_.repaint();
+
+    // Skin selector button
+    skinButton_.setColour (juce::TextButton::buttonColourId,    palette_.panel);
+    skinButton_.setColour (juce::TextButton::buttonOnColourId,  palette_.panel);
+    skinButton_.setColour (juce::TextButton::textColourOffId,   palette_.secondary);
+    skinButton_.setColour (juce::TextButton::textColourOnId,    palette_.primary);
+    skinButton_.setButtonText ("Skin: " + juce::String (index == 0 ? "Dark" : "80s Neon"));
+
+    // Themed popup menu (the button uses the editor's LookAndFeel)
+    tunerLAF_.setColour (juce::PopupMenu::backgroundColourId,            palette_.panel);
+    tunerLAF_.setColour (juce::PopupMenu::textColourId,                  palette_.secondary);
+    tunerLAF_.setColour (juce::PopupMenu::highlightedBackgroundColourId, palette_.primary.withAlpha (0.25f));
+    tunerLAF_.setColour (juce::PopupMenu::highlightedTextColourId,       palette_.primary);
+    skinButton_.repaint();
+}
+
+//==============================================================================
+void ModfingerTunerAudioProcessorEditor::showSkinMenu()
+{
+    juce::PopupMenu menu;
+    menu.addItem ("Dark",      true, skinIndex_ == 0, [this] { setSkinFromIndex (0); });
+    menu.addItem ("80s Neon",  true, skinIndex_ == 1, [this] { setSkinFromIndex (1); });
+
+    juce::PopupMenu::Options opts;
+    opts = opts.withTargetComponent (&skinButton_).withMinimumWidth (130);
+    menu.showMenuAsync (opts);
+}
+
+void ModfingerTunerAudioProcessorEditor::setSkinFromIndex (int index)
+{
+    if (auto* p = processorRef_.apvts.getParameter ("skin"))
+        p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (index)));
 }
 
 //==============================================================================
@@ -241,6 +277,8 @@ void ModfingerTunerAudioProcessorEditor::paint (juce::Graphics& g)
 
 void ModfingerTunerAudioProcessorEditor::resized()
 {
-    // Reference pitch label at bottom center
-    referenceLabel_.setBounds ((getWidth() - 100) / 2, getHeight() - 40, 100, 24);
+    // Bottom row: reference label (left) + skin selector (right)
+    const int y = getHeight() - 40;
+    referenceLabel_.setBounds (20, y, 120, 24);
+    skinButton_.setBounds (getWidth() - 140, y, 120, 24);
 }

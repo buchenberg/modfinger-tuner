@@ -6,6 +6,8 @@ pitch from an incoming audio signal and displays the note, octave, and a cents-t
 
 Available as **VST3**, **AU**, and a **Standalone** app (macOS).
 
+![screenshot](/doc/80s_skin.png)
+
 ---
 
 ## Features
