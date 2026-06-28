@@ -1,0 +1,13 @@
+{
+  "name": "80s Neon",
+  "colors": {
+    "background": "0xff0a0a12",
+    "panel":      "0xff15151f",
+    "primary":    "0xffeaff00",
+    "secondary":  "0xffff2db3",
+    "muted":      "0xff8a5a9a",
+    "zoneLit":    "0xff39ff14",
+    "zoneIdle":   "0xff1a7a14",
+    "marker":     "0xff8a8a96"
+  }
+}

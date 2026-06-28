@@ -25,6 +25,10 @@ endif()
 
 add_subdirectory(JUCE ${CMAKE_BINARY_DIR}/JUCE)
 
+# ── Bundled default skins (compiled into the binary) ─────────────
+juce_add_binary_data(ModfingerSkinsData
+    SOURCES skins/dark.json skins/eighties_neon.json)
+
 juce_add_plugin(ModfingerTuner
     COMPANY_NAME "Modfinger"
     PLUGIN_MANUFACTURER_CODE Mdfg
@@ -41,7 +45,10 @@ target_sources(ModfingerTuner
     PRIVATE
         source/PluginProcessor.cpp
         source/PluginEditor.cpp
-        source/YinDetector.cpp)
+        source/dsp/YinDetector.cpp
+        source/ui/SkinLibrary.cpp)
+
+target_include_directories(ModfingerTuner PRIVATE source)
 
 target_compile_definitions(ModfingerTuner
     PUBLIC
@@ -53,6 +60,7 @@ target_link_libraries(ModfingerTuner
     PRIVATE
         juce::juce_audio_utils
         juce::juce_dsp
+        ModfingerSkinsData
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
@@ -78,7 +86,7 @@ if (MODFINGER_BUILD_TESTS)
     add_executable(ModfingerTunerTests
         tests/PitchTests.cpp
         tests/YinDetectorTests.cpp
-        source/YinDetector.cpp)
+        source/dsp/YinDetector.cpp)
 
     set_target_properties(ModfingerTunerTests PROPERTIES
         CXX_STANDARD 17
@@ -99,7 +107,8 @@ if (MODFINGER_BUILD_JUCE_TESTS)
         tests/ProcessorTests.cpp
         source/PluginProcessor.cpp
         source/PluginEditor.cpp
-        source/YinDetector.cpp)
+        source/dsp/YinDetector.cpp
+        source/ui/SkinLibrary.cpp)
 
     target_compile_definitions(ModfingerTunerJuceTests PRIVATE
         JUCE_WEB_BROWSER=0
@@ -110,7 +119,8 @@ if (MODFINGER_BUILD_JUCE_TESTS)
 
     target_link_libraries(ModfingerTunerJuceTests PRIVATE
         juce::juce_audio_utils
-        juce::juce_dsp)
+        juce::juce_dsp
+        ModfingerSkinsData)
 
     add_test(NAME ModfingerTunerJuceTests COMMAND ModfingerTunerJuceTests)
 endif()

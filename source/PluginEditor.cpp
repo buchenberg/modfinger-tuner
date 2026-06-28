@@ -1,6 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-#include "Pitch.h"
+#include "dsp/Pitch.h"
 
 //==============================================================================
 float ModfingerTunerAudioProcessorEditor::textWidth (const juce::Font& font, const juce::String& text)
@@ -44,8 +44,9 @@ ModfingerTunerAudioProcessorEditor::ModfingerTunerAudioProcessorEditor (Modfinge
     skinButton_.onClick = [this] { showSkinMenu(); };
     addAndMakeVisible (skinButton_);
 
-    // Apply the current skin (colours come from the "skin" parameter).
-    applySkin (processorRef_.apvts.getRawParameterValue ("skin")->load());
+    // Load runtime skins and apply the saved (or default) skin.
+    skinLibrary_.reload();
+    applySkinByName (processorRef_.getSkinName());
 
     // Timer for display updates (~25 Hz)
     startTimerHz (25);
@@ -58,10 +59,16 @@ ModfingerTunerAudioProcessorEditor::~ModfingerTunerAudioProcessorEditor()
 }
 
 //==============================================================================
-void ModfingerTunerAudioProcessorEditor::applySkin (int index)
+void ModfingerTunerAudioProcessorEditor::applySkinByName (const juce::String& name)
 {
-    palette_   = (index == 0) ? TunerPalette::darkOrange() : TunerPalette::eightiesNeon();
-    skinIndex_ = index;
+    const Skin* skin = skinLibrary_.findByName (name);
+    if (skin == nullptr) skin = skinLibrary_.findByName ("80s Neon");
+    if (skin == nullptr && ! skinLibrary_.skins().empty())
+        skin = &skinLibrary_.skins().front();
+    if (skin == nullptr) return;
+
+    activeSkinName_ = skin->name;
+    palette_        = skin->palette;
 
     tunerLAF_.setColour (juce::ResizableWindow::backgroundColourId, palette_.background);
     referenceLabel_.setColour (juce::Label::textColourId,                  palette_.secondary);
@@ -75,7 +82,7 @@ void ModfingerTunerAudioProcessorEditor::applySkin (int index)
     skinButton_.setColour (juce::TextButton::buttonOnColourId,  palette_.panel);
     skinButton_.setColour (juce::TextButton::textColourOffId,   palette_.secondary);
     skinButton_.setColour (juce::TextButton::textColourOnId,    palette_.primary);
-    skinButton_.setButtonText ("Skin: " + juce::String (index == 0 ? "Dark" : "80s Neon"));
+    skinButton_.setButtonText ("Skin: " + activeSkinName_);
 
     // Themed popup menu (the button uses the editor's LookAndFeel)
     tunerLAF_.setColour (juce::PopupMenu::backgroundColourId,            palette_.panel);
@@ -83,33 +90,63 @@ void ModfingerTunerAudioProcessorEditor::applySkin (int index)
     tunerLAF_.setColour (juce::PopupMenu::highlightedBackgroundColourId, palette_.primary.withAlpha (0.25f));
     tunerLAF_.setColour (juce::PopupMenu::highlightedTextColourId,       palette_.primary);
     skinButton_.repaint();
+    repaint();
 }
 
 //==============================================================================
 void ModfingerTunerAudioProcessorEditor::showSkinMenu()
 {
+    skinLibrary_.reload();   // pick up files dropped into the user folder since last open
+
     juce::PopupMenu menu;
-    menu.addItem ("Dark",      true, skinIndex_ == 0, [this] { setSkinFromIndex (0); });
-    menu.addItem ("80s Neon",  true, skinIndex_ == 1, [this] { setSkinFromIndex (1); });
+    for (const auto& skin : skinLibrary_.skins())
+        menu.addItem (skin.name, true, skin.name == activeSkinName_,
+                      [this, n = skin.name] { selectSkin (n); });
+
+    menu.addSeparator();
+    menu.addItem ("Import skin...",        true, false, [this] { importSkin(); });
+    menu.addItem ("Open skins folder...",  true, false,
+                  [] { SkinLibrary::userFolder().startAsProcess(); });
 
     juce::PopupMenu::Options opts;
-    opts = opts.withTargetComponent (&skinButton_).withMinimumWidth (130);
+    opts = opts.withTargetComponent (&skinButton_).withMinimumWidth (150);
     menu.showMenuAsync (opts);
 }
 
-void ModfingerTunerAudioProcessorEditor::setSkinFromIndex (int index)
+void ModfingerTunerAudioProcessorEditor::selectSkin (const juce::String& name)
 {
-    if (auto* p = processorRef_.apvts.getParameter ("skin"))
-        p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (index)));
+    processorRef_.setSkinName (name);
+    applySkinByName (name);
+}
+
+void ModfingerTunerAudioProcessorEditor::importSkin()
+{
+    skinFileChooser_ = std::make_unique<juce::FileChooser> ("Import Skin", SkinLibrary::userFolder(), "*.json");
+    skinFileChooser_->launchAsync (juce::FileBrowserComponent::openMode
+                                        | juce::FileBrowserComponent::canSelectFiles,
+        [this] (const juce::FileChooser& fc)
+        {
+            const juce::File src = fc.getResult();
+            if (src == juce::File{})
+                return;
+
+            const juce::File dst = SkinLibrary::userFolder().getChildFile (src.getFileName());
+            src.copyFileTo (dst);
+
+            const juce::String name = SkinLibrary::nameFromJson (src.loadFileAsString());
+            skinLibrary_.reload();
+            if (name.isNotEmpty())
+                selectSkin (name);
+        });
 }
 
 //==============================================================================
 void ModfingerTunerAudioProcessorEditor::timerCallback()
 {
-    // React to skin changes coming from the host.
-    const int skinIdx = static_cast<int> (processorRef_.apvts.getRawParameterValue ("skin")->load());
-    if (skinIdx != skinIndex_)
-        applySkin (skinIdx);
+    // Re-apply the skin if the host restored a different one.
+    const juce::String skinName = processorRef_.getSkinName();
+    if (skinName != activeSkinName_)
+        applySkinByName (skinName);
 
     const float rawFreq         = processorRef_.getDisplayFrequency();
     const float rawAperiodicity = processorRef_.getDisplayAperiodicity();
@@ -207,7 +244,8 @@ void ModfingerTunerAudioProcessorEditor::paint (juce::Graphics& g)
         g.setColour (noteColour.withAlpha (0.8f * fade));
         g.setFont (juce::Font { juce::FontOptions { 16.0f, juce::Font::bold } });
         juce::String centsText;
-        centsText << (cachedCents_ >= 0.0 ? "+" : "") << juce::String (cachedCents_, 1) << " \u00A2";  // cents symbol
+        centsText << (cachedCents_ >= 0.0 ? "+" : "") << juce::String (cachedCents_, 1)
+                  << " " << juce::String::charToString (static_cast<juce::juce_wchar> (0x00A2));  // cents symbol
         g.drawText (centsText, juce::Rectangle<float> (0, centsValueY, w, 20.0f),
                     juce::Justification::centred, false);
     }

@@ -1,8 +1,10 @@
 #pragma once
 
 #include "PluginProcessor.h"
-#include "Pitch.h"
-#include "TunerPalette.h"
+#include "dsp/Pitch.h"
+#include "ui/TunerPalette.h"
+#include "ui/SkinLibrary.h"
+#include <memory>
 
 //==============================================================================
 /** Flat modern LookAndFeel for Modfinger Tuner — dark + orange theme. */
@@ -32,14 +34,17 @@ public:
 private:
     void timerCallback() override;
 
-    // Apply a colour skin by parameter index (0 = Dark, 1 = 80s Neon, …).
-    void applySkin (int index);
+    // Apply a skin by name (looks it up in the runtime library).
+    void applySkinByName (const juce::String& name);
 
-    // Show the in-UI skin selector popup.
+    // Show the in-UI skin selector popup (reloads the library first).
     void showSkinMenu();
 
-    // Push a chosen skin index into the "skin" parameter.
-    void setSkinFromIndex (int index);
+    // Select a skin by name: persist it and apply it.
+    void selectSkin (const juce::String& name);
+
+    // Open a file chooser to import a skin JSON into the user folder.
+    void importSkin();
 
     // Advance width of a single-line string (replaces deprecated Font::getStringWidthFloat).
     static float textWidth (const juce::Font&, const juce::String&);
@@ -50,12 +55,16 @@ private:
     // Reference pitch label (click to edit)
     juce::Label referenceLabel_;
 
-    // Skin selector (opens a themed popup; drives the "skin" parameter)
+    // Skin selector (opens a themed popup listing runtime skins)
     juce::TextButton skinButton_;
 
-    // Active colour skin (driven by the "skin" parameter).
-    TunerPalette palette_ { TunerPalette::eightiesNeon() };
-    int skinIndex_ = -1;   // last applied skin index; -1 forces apply on first use
+    // Runtime skin library (bundled defaults + imported user skins)
+    SkinLibrary skinLibrary_;
+    juce::String activeSkinName_;
+    std::unique_ptr<juce::FileChooser> skinFileChooser_;
+
+    // Active colour skin.
+    TunerPalette palette_;
 
     // Smoothed detected frequency; 0.0f means "no signal".
     float smoothedFreq_ = 0.0f;

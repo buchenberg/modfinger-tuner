@@ -52,11 +52,19 @@ public:
             expectWithinAbsoluteError (after, before, 0.15f, "round-trip value");
         }
 
-        beginTest ("Skin parameter defaults to 80s Neon");
+        beginTest ("Skin name persists across state save/restore");
         {
             ModfingerTunerAudioProcessor proc;
-            const float skinDefault = proc.apvts.getRawParameterValue ("skin")->load();
-            expectWithinAbsoluteError (skinDefault, 1.0f, 1.0e-4f, "default skin index");
+            expectEquals (proc.getSkinName(), juce::String ("80s Neon"), "default skin name");
+
+            proc.setSkinName ("Dark");
+
+            MemoryBlock block;
+            proc.getStateInformation (block);
+
+            ModfingerTunerAudioProcessor restored;
+            restored.setStateInformation (block.getData(), static_cast<int> (block.getSize()));
+            expectEquals (restored.getSkinName(), juce::String ("Dark"), "restored skin name");
         }
     }
 };
