@@ -1,7 +1,29 @@
 cmake_minimum_required(VERSION 3.22)
 project(modfinger-tuner VERSION 1.0.0)
 
-add_subdirectory(../Juce ${CMAKE_BINARY_DIR}/JUCE)
+# ── Auto-initialize the JUCE submodule ────────────────────────────
+# Lets a plain `git clone` (no --recurse-submodules) still configure. Only runs
+# when git is available and JUCE/ hasn't been populated yet.
+option(MODFINGER_AUTOINIT_SUBMODULES "Initialize git submodules at configure time" ON)
+if (MODFINGER_AUTOINIT_SUBMODULES)
+    find_package(Git QUIET)
+    if (GIT_FOUND
+            AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.gitmodules"
+            AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
+        message(STATUS "Initializing JUCE submodule...")
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive -- JUCE
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            RESULT_VARIABLE _submod_result)
+        if (NOT _submod_result EQUAL 0)
+            message(FATAL_ERROR
+                "Initializing the JUCE submodule failed (exit ${_submod_result}). "
+                "Run 'git submodule update --init --recursive' manually.")
+        endif()
+    endif()
+endif()
+
+add_subdirectory(JUCE ${CMAKE_BINARY_DIR}/JUCE)
 
 juce_add_plugin(ModfingerTuner
     COMPANY_NAME "Modfinger"
@@ -36,8 +58,13 @@ target_link_libraries(ModfingerTuner
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
 
-# ── Unit tests (Catch2) ───────────────────────────────────────────
-option(MODFINGER_BUILD_TESTS "Build Modfinger Tuner unit tests" ON)
+# ── Tests ─────────────────────────────────────────────────────────
+option(MODFINGER_BUILD_TESTS      "Build Catch2 unit tests (pure DSP/pitch logic)" ON)
+option(MODFINGER_BUILD_JUCE_TESTS "Build JUCE UnitTest target (parameter & state coverage)" ON)
+
+if (MODFINGER_BUILD_TESTS OR MODFINGER_BUILD_JUCE_TESTS)
+    include(CTest)
+endif()
 
 if (MODFINGER_BUILD_TESTS)
     include(FetchContent)
@@ -60,6 +87,30 @@ if (MODFINGER_BUILD_TESTS)
     target_include_directories(ModfingerTunerTests PRIVATE source)
     target_link_libraries(ModfingerTunerTests PRIVATE Catch2::Catch2WithMain)
 
-    include(CTest)
     add_test(NAME ModfingerTunerTests COMMAND ModfingerTunerTests)
+endif()
+
+if (MODFINGER_BUILD_JUCE_TESTS)
+    # Covers the JUCE-coupled seams (parameter range/default, state round-trip).
+    # Only needs JUCE — no network dependency — so it builds offline too.
+    juce_add_console_app(ModfingerTunerJuceTests)
+
+    target_sources(ModfingerTunerJuceTests PRIVATE
+        tests/ProcessorTests.cpp
+        source/PluginProcessor.cpp
+        source/PluginEditor.cpp
+        source/YinDetector.cpp)
+
+    target_compile_definitions(ModfingerTunerJuceTests PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0)
+
+    target_include_directories(ModfingerTunerJuceTests PRIVATE source)
+
+    target_link_libraries(ModfingerTunerJuceTests PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp)
+
+    add_test(NAME ModfingerTunerJuceTests COMMAND ModfingerTunerJuceTests)
 endif()

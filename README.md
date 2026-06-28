@@ -28,23 +28,37 @@ Available as **VST3**, **AU**, and a **Standalone** app (macOS).
 |------------|-------|
 | **CMake ≥ 3.22** | Build system. |
 | **C++17 compiler** | Apple Clang (Xcode Command Line Tools) on macOS. |
-| **JUCE** | Must be checked out as a **sibling directory** at `../Juce` (see below). |
+| **JUCE** | Bundled as a git submodule at `JUCE/` (pinned to **8.0.12**). See below. |
 | **Network access** | Only on first configure if tests are enabled (Catch2 is fetched via CMake `FetchContent`). Pass `-DMODFINGER_BUILD_TESTS=OFF` to build offline. |
 
-### JUCE as a sibling
+### JUCE (bundled submodule)
 
-`CMakeLists.txt` references JUCE out-of-tree:
-
-```cmake
-add_subdirectory(../Juce ${CMAKE_BINARY_DIR}/JUCE)
-```
-
-So JUCE is **not** vendored here. Clone it next to this project:
+JUCE is bundled as a git submodule at `JUCE/` (pinned to JUCE **8.0.12**), so the repo is
+self-contained. Clone with submodules:
 
 ```sh
-cd ..                # parent of modfinger-tuner/
-git clone https://github.com/juce-framework/JUCE.git Juce
+git clone --recurse-submodules <repo-url>
 ```
+
+If you already cloned without them, initialize the submodule:
+
+```sh
+git submodule update --init --recursive
+```
+
+> **You usually don't need to.** CMake auto-initializes the submodule on first
+> configure (it runs `git submodule update --init` when `JUCE/` is empty), so even a
+> plain `git clone` works. Disable with `-DMODFINGER_AUTOINIT_SUBMODULES=OFF` (e.g. in CI
+> where you've already fetched it).
+
+`CMakeLists.txt` builds JUCE from the bundled checkout:
+
+```cmake
+add_subdirectory(JUCE ${CMAKE_BINARY_DIR}/JUCE)
+```
+
+To use a different JUCE version, check out the desired tag inside `JUCE/` and commit the
+updated submodule pointer (e.g. `cd JUCE && git checkout 8.0.x && cd .. && git add JUCE`).
 
 ---
 
@@ -53,6 +67,7 @@ git clone https://github.com/juce-framework/JUCE.git Juce
 ```
 modfinger-tuner/
 ├── CMakeLists.txt
+├── JUCE/                         # JUCE 8.0.12 (git submodule)
 ├── source/
 │   ├── PluginProcessor.{h,cpp}   # AudioProcessor: mono sum, drives YIN, pushes atomics
 │   ├── PluginEditor.{h,cpp}      # Editor: smoothing, UI rendering, reference label
@@ -60,7 +75,8 @@ modfinger-tuner/
 │   └── Pitch.h                   # Pure 12-TET helpers: note/octave/cents (JUCE-free, testable)
 └── tests/
     ├── PitchTests.cpp            # Catch2 unit tests for pitch math
-    └── YinDetectorTests.cpp      # Catch2 unit tests for the detector on generated sines
+    ├── YinDetectorTests.cpp      # Catch2 unit tests for the detector on generated sines
+    └── ProcessorTests.cpp        # JUCE UnitTests: parameter range + state round-trip
 ```
 
 The DSP (`YinDetector`) and music-theory math (`Pitch`) are intentionally kept free of
@@ -80,7 +96,9 @@ cmake --build build --target ModfingerTuner_AU -j        # AU
 cmake --build build --target ModfingerTuner_Standalone -j
 ```
 
-Built artefacts land under `build/ModfingerTuner_artefacts/<Format>/`.
+Built artefacts land under `build/ModfingerTuner_artefacts/Release/<Format>/`
+(single-config generators like Makefiles; with a multi-config generator such as Xcode the
+`Release/` segment moves to the `--config` flag).
 
 ### Installing plugins
 
@@ -88,11 +106,11 @@ Built artefacts land under `build/ModfingerTuner_artefacts/<Format>/`.
 
 ```sh
 # VST3
-cp -R "build/ModfingerTuner_artefacts/VST3/Modfinger Tuner.vst3" \
+cp -R "build/ModfingerTuner_artefacts/Release/VST3/Modfinger Tuner.vst3" \
       ~/Library/Audio/Plug-Ins/VST3/
 
 # AU
-cp -R "build/ModfingerTuner_artefacts/AU/Modfinger Tuner.component" \
+cp -R "build/ModfingerTuner_artefacts/Release/AU/Modfinger Tuner.component" \
       ~/Library/Audio/Plug-Ins/Components/
 ```
 
@@ -103,13 +121,22 @@ validation before the host registers them.)
 
 ## Tests
 
+Two test suites, both run via CTest:
+
 ```sh
-cmake --build build --target ModfingerTunerTests -j
+cmake --build build --target ModfingerTunerTests ModfingerTunerJuceTests -j
 ctest --test-dir build --output-on-failure
 ```
 
-Tests are built by default. Disable them with `-DMODFINGER_BUILD_TESTS=OFF`
-(e.g. for offline CI or minimal builds).
+| Target | Framework | Covers |
+|--------|-----------|--------|
+| `ModfingerTunerTests` | Catch2 (fetched) | Pure logic: `pitch` note/cents math and `YinDetector` on generated sines. JUCE-free. |
+| `ModfingerTunerJuceTests` | JUCE `UnitTest` | JUCE-coupled seams: `reference` parameter range/default and the state save/restore round-trip. |
+
+Options (both on by default):
+
+- `-DMODFINGER_BUILD_TESTS=OFF` — skip the Catch2 suite (avoids the network fetch for offline/minimal builds).
+- `-DMODFINGER_BUILD_JUCE_TESTS=OFF` — skip the JUCE suite (needs only JUCE, builds offline).
 
 ---
 
@@ -147,7 +174,10 @@ Plugin state (parameter values) is saved/restored via the host.
 - **"ad-hoc signature" warnings on macOS** — builds are ad-hoc signed; they run locally but
   are not notarized. Adjust signing in `CMakeLists.txt` (`JUCE_SIGN_INTERNALLY`/notarization)
   for distribution.
-- **CMake can't find JUCE** — ensure JUCE is cloned at `../Juce` (see *JUCE as a sibling*).
+- **CMake can't find JUCE** — ensure the submodule is initialized: `git submodule update --init --recursive` (see *JUCE (bundled submodule)*).
+- **`Modfinger Tuner.vst3: No such file` when installing** — artefacts are under
+  `build/ModfingerTuner_artefacts/Release/...` with the Makefiles generator; adjust the copy
+  path accordingly.
 - **First configure needs network** — Catch2 is fetched for tests. Use
   `-DMODFINGER_BUILD_TESTS=OFF` to skip.
 
