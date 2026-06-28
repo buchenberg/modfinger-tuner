@@ -24,13 +24,15 @@ private:
     double fs_ = 44100.0;
 
     static constexpr int bufferSize_      = 4096;
-    static constexpr int minPeriod_       = 22;   // ~2000 Hz max
-    static constexpr int maxPeriod_       = 735;  // ~60 Hz min
+    static constexpr int analysisWindow_  = bufferSize_ / 2;  // YIN diff-function window (≥2 periods at the 60 Hz floor)
+    static constexpr int minPeriod_       = 22;    // ~2000 Hz max
+    static constexpr int maxPeriod_       = 735;   // ~60 Hz min
     static constexpr float yinThreshold_  = 0.15f;
-    static constexpr int detectInterval_  = 512;  // samples between YIN runs
+    static constexpr int detectInterval_  = 1024;  // samples between YIN runs (~43 Hz @ 44.1 kHz)
 
     std::vector<float> ringBuffer_;
-    int writePos_             = 0;
+    std::vector<float> linear_;     // ring buffer unrolled into contiguous order per detection
+    int writePos_              = 0;
     int samplesSinceDetection_ = 0;
 
     std::vector<float> diffFunc_;  // difference function, size maxPeriod_ + 2

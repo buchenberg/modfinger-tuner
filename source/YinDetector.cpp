@@ -6,7 +6,8 @@ void YinDetector::prepare (double sampleRate)
 {
     fs_ = sampleRate;
     ringBuffer_.assign (bufferSize_, 0.0f);
-    diffFunc_.assign (maxPeriod_ + 2, 0.0f);
+    linear_.assign     (bufferSize_, 0.0f);
+    diffFunc_.assign   (maxPeriod_ + 2, 0.0f);
     writePos_ = 0;
     samplesSinceDetection_ = 0;
     detectedFreq_ = 0.0f;
@@ -34,20 +35,41 @@ void YinDetector::processBlock (const float* mono, int numSamples)
 void YinDetector::runDetection()
 {
     const int N = bufferSize_;
+    const int W = analysisWindow_;
+
+    // Unroll the ring buffer into contiguous, time-ordered order (oldest first);
+    // writePos_ is the next write index, i.e. the oldest sample.
+    for (int i = 0; i < N; ++i)
+        linear_[static_cast<size_t> (i)] = ringBuffer_[static_cast<size_t> ((writePos_ + i) % N)];
 
     // ── Step 1: Difference function d(τ) = Σ(x_j - x_{j+τ})² ──────
+    // Contiguous sweep over the windowed region with 4 accumulators to break the
+    // serial dependency chain (better ILP) and avoid per-iteration modular indexing.
+    const float* const data = linear_.data();
     for (int tau = 0; tau <= maxPeriod_; ++tau)
     {
-        float sum = 0.0f;
-        for (int j = 0; j < N - maxPeriod_; ++j)
+        const float* a = data;
+        const float* b = data + tau;
+
+        float s0 = 0.0f, s1 = 0.0f, s2 = 0.0f, s3 = 0.0f;
+        int j = 0;
+        for (; j + 4 <= W; j += 4)
         {
-            const int idx1 = (writePos_ + j)       % N;
-            const int idx2 = (writePos_ + j + tau) % N;
-            const float diff = ringBuffer_[static_cast<size_t> (idx1)]
-                             - ringBuffer_[static_cast<size_t> (idx2)];
-            sum += diff * diff;
+            const float d0 = a[j]     - b[j];
+            const float d1 = a[j + 1] - b[j + 1];
+            const float d2 = a[j + 2] - b[j + 2];
+            const float d3 = a[j + 3] - b[j + 3];
+            s0 += d0 * d0;
+            s1 += d1 * d1;
+            s2 += d2 * d2;
+            s3 += d3 * d3;
         }
-        diffFunc_[static_cast<size_t> (tau)] = sum;
+        for (; j < W; ++j)
+        {
+            const float d = a[j] - b[j];
+            s0 += d * d;
+        }
+        diffFunc_[static_cast<size_t> (tau)] = (s0 + s1) + (s2 + s3);
     }
 
     // ── Step 2: Cumulative mean normalised difference ──────────────

@@ -143,9 +143,10 @@ Options (both on by default):
 ## How it works
 
 1. **Mono sum** — stereo input is averaged to mono in `processBlock`.
-2. **YIN detection** — a 4096-sample ring buffer is analyzed every 512 samples.
-   The difference function → cumulative mean normalized difference → absolute threshold
-   → parabolic interpolation yields the fundamental frequency and an aperiodicity score.
+2. **YIN detection** — a 4096-sample ring buffer is analyzed every 1024 samples (~43 Hz).
+   The difference function (windowed, unrolled into contiguous order) → cumulative mean
+   normalized difference → absolute threshold → parabolic interpolation yields the
+   fundamental frequency and an aperiodicity score.
 3. **Cross-thread hand-off** — only `frequency` and `aperiodicity` (both
    `std::atomic<float>`) are written on the audio thread.
 4. **UI** — a 25 Hz timer smooths the frequency on the message thread and derives the note
