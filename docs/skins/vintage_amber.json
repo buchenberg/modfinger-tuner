@@ -1,0 +1,13 @@
+{
+  "name": "Vintage Amber",
+  "colors": {
+    "background": "0xff1a1410",
+    "panel":      "0xff261d16",
+    "primary":    "0xffe8903a",
+    "secondary":  "0xffc08050",
+    "muted":      "0xff5a4530",
+    "zoneLit":    "0xff44cc44",
+    "zoneIdle":   "0xff1a5014",
+    "marker":     "0xff8a6a4a"
+  }
+}

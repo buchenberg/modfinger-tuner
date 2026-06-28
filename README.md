@@ -6,7 +6,7 @@ pitch from an incoming audio signal and displays the note, octave, and a cents-t
 
 Available as **VST3**, **AU**, and a **Standalone** app (macOS).
 
-<img alt="80s skin" src="./doc/80s_skin.png" width="400">
+<img alt="80s skin" src="./docs/80s_skin.png" width="400">
 
 
 ## Features
@@ -72,8 +72,11 @@ updated submodule pointer (e.g. `cd JUCE && git checkout 8.0.x && cd .. && git a
 ```
 modfinger-tuner/
 ├── CMakeLists.txt
+├── AGENTS.md                     # Quick-reference for AI-assisted dev
 ├── JUCE/                         # JUCE 8.0.12 (git submodule)
 ├── skins/                        # JSON skin files (bundled defaults + templates to import)
+├── docs/                         # Architecture docs (see docs/)
+│   └── skins/                    # Extra importable skin files (copy into the user folder)
 ├── source/
 │   ├── PluginProcessor.{h,cpp}   # AudioProcessor: mono sum, drives YIN, pushes atomics
 │   ├── PluginEditor.{h,cpp}      # Editor: smoothing, UI rendering, skin selector
@@ -258,6 +261,9 @@ The active skin is stored **by name** in plugin state (not a host parameter), so
 set can be dynamic. A user skin with the same `name` as a bundled one overrides it. The
 defaults ship as `skins/dark.json` and `skins/eighties_neon.json` (bundled via CMake
 `juce_add_binary_data`).
+
+Extra importable skin files live in `docs/skins/` — copy one into your user folder to
+try it. Architecture docs (threading, testing, skin system) live in `docs/`.
 
 ---
 

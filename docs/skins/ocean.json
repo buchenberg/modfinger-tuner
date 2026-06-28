@@ -1,0 +1,13 @@
+{
+  "name": "Ocean",
+  "colors": {
+    "background": "0xff0a141e",
+    "panel":      "0xff0f1e2b",
+    "primary":    "0xff40c4ff",
+    "secondary":  "0xff30a0d0",
+    "muted":      "0xff2a4a5a",
+    "zoneLit":    "0xff80e080",
+    "zoneIdle":   "0xff1a3a1a",
+    "marker":     "0xff4a6a8a"
+  }
+}
