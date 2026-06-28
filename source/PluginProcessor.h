@@ -7,7 +7,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 
-#include "YinDetector.h"
+#include "dsp/YinDetector.h"
 
 //==============================================================================
 class ModfingerTunerAudioProcessor : public juce::AudioProcessor
@@ -54,6 +54,11 @@ public:
     // on the UI side from the frequency via the pure pitch helpers.
     float getDisplayFrequency()    const { return displayFreq_.load (std::memory_order_relaxed); }
     float getDisplayAperiodicity() const { return displayAperiodicity_.load (std::memory_order_relaxed); }
+
+    // Active skin name, stored in plugin state (not a host parameter) so the
+    // runtime skin set can be dynamic. Defaults to "80s Neon".
+    juce::String getSkinName() const { return apvts.state.getProperty ("skinName", "80s Neon").toString(); }
+    void setSkinName (const juce::String& name) { apvts.state.setProperty ("skinName", name, nullptr); }
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

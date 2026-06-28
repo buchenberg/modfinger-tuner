@@ -6,7 +6,8 @@ pitch from an incoming audio signal and displays the note, octave, and a cents-t
 
 Available as **VST3**, **AU**, and a **Standalone** app (macOS).
 
----
+<img alt="80s skin" src="./doc/80s_skin.png" width="400">
+
 
 ## Features
 
@@ -27,8 +28,9 @@ Available as **VST3**, **AU**, and a **Standalone** app (macOS).
 | Dependency | Notes |
 |------------|-------|
 | **CMake ≥ 3.22** | Build system. |
-| **C++17 compiler** | Apple Clang (Xcode Command Line Tools) on macOS. |
+| **C++17 compiler** | Apple Clang (Xcode Command Line Tools) on macOS · MSVC (Visual Studio 2019/2022 with the "Desktop development with C++" workload) on Windows · GCC or Clang on Linux. |
 | **JUCE** | Bundled as a git submodule at `JUCE/` (pinned to **8.0.12**). See below. |
+| **Linux system libraries** *(Linux only)* | JUCE's GUI/audio need dev headers. On Debian/Ubuntu: `sudo apt install libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxcursor-dev libxcomposite-dev libfreetype6-dev libfontconfig1-dev libasound2-dev`. (This plugin disables curl/web, so those aren't needed.) |
 | **Network access** | Only on first configure if tests are enabled (Catch2 is fetched via CMake `FetchContent`). Pass `-DMODFINGER_BUILD_TESTS=OFF` to build offline. |
 
 ### JUCE (bundled submodule)
@@ -71,11 +73,16 @@ updated submodule pointer (e.g. `cd JUCE && git checkout 8.0.x && cd .. && git a
 modfinger-tuner/
 ├── CMakeLists.txt
 ├── JUCE/                         # JUCE 8.0.12 (git submodule)
+├── skins/                        # JSON skin files (bundled defaults + templates to import)
 ├── source/
 │   ├── PluginProcessor.{h,cpp}   # AudioProcessor: mono sum, drives YIN, pushes atomics
-│   ├── PluginEditor.{h,cpp}      # Editor: smoothing, UI rendering, reference label
-│   ├── YinDetector.{h,cpp}       # Pure DSP: YIN pitch detector (JUCE-free, testable)
-│   └── Pitch.h                   # Pure 12-TET helpers: note/octave/cents (JUCE-free, testable)
+│   ├── PluginEditor.{h,cpp}      # Editor: smoothing, UI rendering, skin selector
+│   ├── dsp/
+│   │   ├── Pitch.h               # Pure 12-TET helpers: note/octave/cents (JUCE-free, testable)
+│   │   └── YinDetector.{h,cpp}   # Pure DSP: YIN pitch detector (JUCE-free, testable)
+│   └── ui/
+│       ├── TunerPalette.h        # Semantic colour slots for a skin
+│       └── SkinLibrary.{h,cpp}   # Runtime JSON skin loader (bundled + user folder)
 └── tests/
     ├── PitchTests.cpp            # Catch2 unit tests for pitch math
     ├── YinDetectorTests.cpp      # Catch2 unit tests for the detector on generated sines
@@ -89,36 +96,73 @@ JUCE dependencies so they can be unit-tested in isolation.
 
 ## Building
 
+The same CMake commands work everywhere; only the generator/config and the available
+formats differ. AU is **macOS-only** — JUCE skips it automatically on Windows/Linux, so
+use `ModfingerTuner_VST3` and `ModfingerTuner_Standalone` there (or `ModfingerTuner_All`
+on macOS for everything).
+
 ```sh
 # Configure (from the project root)
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release          # macOS / Linux (Makefiles or Ninja)
+#  Windows (Visual Studio generator is multi-config — omit -DCMAKE_BUILD_TYPE):
+#  cmake -B build -G "Visual Studio 17 2022"
 
-# Build a specific format (or use ModfingerTuner_All for everything)
-cmake --build build --target ModfingerTuner_VST3 -j      # VST3
-cmake --build build --target ModfingerTuner_AU -j        # AU
-cmake --build build --target ModfingerTuner_Standalone -j
+# Build a specific format
+cmake --build build --target ModfingerTuner_VST3 --config Release -j      # VST3
+cmake --build build --target ModfingerTuner_AU --config Release -j        # AU (macOS only)
+cmake --build build --target ModfingerTuner_Standalone --config Release -j
 ```
 
-Built artefacts land under `build/ModfingerTuner_artefacts/Release/<Format>/`
-(single-config generators like Makefiles; with a multi-config generator such as Xcode the
-`Release/` segment moves to the `--config` flag).
+> `--config Release` is required by multi-config generators (Visual Studio, Xcode) and
+> ignored by single-config ones (Makefiles, Ninja), where you set the config at configure
+> time with `-DCMAKE_BUILD_TYPE=Release`.
+
+Built artefacts land under `build/ModfingerTuner_artefacts/…`:
+
+| Generator | VST3 path |
+|-----------|-----------|
+| Makefiles / Ninja (macOS, Linux) | `ModfingerTuner_artefacts/Release/VST3/` |
+| Visual Studio / Xcode (multi-config) | `ModfingerTuner_artefacts/VST3/` |
 
 ### Installing plugins
 
-`COPY_PLUGIN_AFTER_BUILD` is `OFF`, so copy the bundles manually (macOS):
+`COPY_PLUGIN_AFTER_BUILD` is `OFF`, so copy the bundles manually. VST3 destinations
+(copy the whole `.vst3` bundle — it's a folder):
+
+| OS | Per-user (no admin) | System |
+|----|---------------------|--------|
+| macOS | `~/Library/Audio/Plug-Ins/VST3/` | `/Library/Audio/Plug-Ins/VST3/` |
+| Windows | `%LOCALAPPDATA%\VST3\` | `%PROGRAMFILES%\Common Files\VST3\` |
+| Linux | `~/.vst3/` | `/usr/lib/vst3/` |
 
 ```sh
-# VST3
+# macOS
 cp -R "build/ModfingerTuner_artefacts/Release/VST3/Modfinger Tuner.vst3" \
       ~/Library/Audio/Plug-Ins/VST3/
 
-# AU
+# Linux
+cp -R "build/ModfingerTuner_artefacts/Release/VST3/Modfinger Tuner.vst3" ~/.vst3/
+```
+
+```powershell
+# Windows (PowerShell) — VS-generator artefact path has no Release\ segment
+Copy-Item -Recurse "build\ModfingerTuner_artefacts\VST3\Modfinger Tuner.vst3" `
+                    "$env:LOCALAPPDATA\VST3\"
+```
+
+**AU (macOS only):**
+
+```sh
 cp -R "build/ModfingerTuner_artefacts/Release/AU/Modfinger Tuner.component" \
       ~/Library/Audio/Plug-Ins/Components/
 ```
 
-Then **fully restart your DAW** so it rescans. (AU components may also need `auval`
-validation before the host registers them.)
+AU components may need `auval` validation before the host registers them.
+
+**Standalone:** run the built app/executable directly from the artefacts folder — no
+install step.
+
+Then **fully restart your DAW** so it rescans.
 
 ---
 
@@ -167,7 +211,53 @@ Options (both on by default):
 |-----------|-------|---------|-------------|
 | `reference` | 415–466 Hz | 440 Hz | A4 reference frequency used for note/cents mapping. Editable via the Hz label. |
 
-Plugin state (parameter values) is saved/restored via the host.
+Plugin state (parameter values and the active skin name) is saved/restored via the host.
+
+### Skins
+
+Colours are **data-driven at runtime** from JSON skin files — no recompile needed to add
+one. Two defaults are bundled into the binary; imported skins live in a per-user folder:
+
+- macOS: `~/Library/Application Support/ModfingerTuner/skins/`
+- Windows: `%APPDATA%\ModfingerTuner\skins\`
+- Linux: `~/.config/ModfingerTuner/skins/`
+
+Open the **"Skin: …"** button (bottom-right) to switch, or use **Import skin…** /
+**Open skins folder…**. An imported (or folder-dropped) skin appears the next time the
+menu opens — the menu rescans on every open.
+
+Skin file schema (colours are `0xAARRGGBB` hex strings):
+
+```json
+{
+  "name": "80s Neon",
+  "colors": {
+    "background": "0xff0a0a12",
+    "panel":      "0xff15151f",
+    "primary":    "0xffeaff00",
+    "secondary":  "0xffff2db3",
+    "muted":      "0xff8a5a9a",
+    "zoneLit":    "0xff39ff14",
+    "zoneIdle":   "0xff1a7a14",
+    "marker":     "0xff8a8a96"
+  }
+}
+```
+
+| Slot | Used for |
+|------|----------|
+| `background` | plugin background |
+| `panel` | cents-bar track, label edit background |
+| `primary` | note letter, needle, cents number |
+| `secondary` | frequency readout, reference label |
+| `muted` | "listening…", markings, non-confident note |
+| `zoneLit` / `zoneIdle` | in-tune band when the needle is inside / otherwise |
+| `marker` | center tick |
+
+The active skin is stored **by name** in plugin state (not a host parameter), so the skin
+set can be dynamic. A user skin with the same `name` as a bundled one overrides it. The
+defaults ship as `skins/dark.json` and `skins/eighties_neon.json` (bundled via CMake
+`juce_add_binary_data`).
 
 ---
 

@@ -1,0 +1,13 @@
+{
+  "name": "Dark",
+  "colors": {
+    "background": "0xff1a1a1e",
+    "panel":      "0xff2a2a30",
+    "primary":    "0xffe0743b",
+    "secondary":  "0xffa0a0a8",
+    "muted":      "0xff5a5a62",
+    "zoneLit":    "0xff3fd66b",
+    "zoneIdle":   "0xff22aa44",
+    "marker":     "0xff888890"
+  }
+}
