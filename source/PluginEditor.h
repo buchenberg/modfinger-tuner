@@ -43,6 +43,18 @@ private:
     // Smoothed detected frequency; 0.0f means "no signal".
     float smoothedFreq_ = 0.0f;
 
+    // Current readout state: tracking a live pitch, holding (dimmed) the last
+    // note, or idle ("listening…").
+    enum class DisplayState { tracking, holding, listening };
+    DisplayState displayState_ = DisplayState::listening;
+
+    // Ticks left to keep showing the last note after the signal drops, before
+    // reverting to "listening…".
+    int holdTicksRemaining_ = 0;
+
+    // Eased alpha applied to the readout while holding (1.0 → kHoldFadeAlpha).
+    float holdFadeAlpha_ = 1.0f;
+
     // Display values derived on the message thread (from the atomic frequency).
     pitch::NoteInfo cachedNote_   { "A", 4 };
     double          cachedCents_  = 0.0;
@@ -51,7 +63,8 @@ private:
 
     // Tuning constants
     static constexpr float kConfidentAperiodicity = 0.2f;
-    static constexpr float kSilenceFloorHz        = 40.0f;  // below YIN's ~60 Hz floor: treat as silent
+    static constexpr int   kHoldTicks             = 125;   // ~5 s @ 25 Hz: how long the last note lingers
+    static constexpr float kHoldFadeAlpha         = 0.35f; // dimmed level while holding the last note
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModfingerTunerAudioProcessorEditor)
 };
