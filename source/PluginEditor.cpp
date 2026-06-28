@@ -19,10 +19,6 @@ ModfingerTunerAudioProcessorEditor::ModfingerTunerAudioProcessorEditor (Modfinge
 
     // ── Reference pitch label (editable) ───────────────────────────
     referenceLabel_.setEditable (true);
-    referenceLabel_.setColour (juce::Label::textColourId, juce::Colour (0xffa0a0a8));
-    referenceLabel_.setColour (juce::Label::textWhenEditingColourId, juce::Colour (0xffe0743b));
-    referenceLabel_.setColour (juce::Label::backgroundWhenEditingColourId, juce::Colour (0xff24242a));
-    referenceLabel_.setColour (juce::Label::outlineWhenEditingColourId, juce::Colour (0xffe0743b));
     referenceLabel_.setJustificationType (juce::Justification::centred);
     referenceLabel_.setFont (juce::Font { juce::FontOptions { 14.0f } });
 
@@ -44,6 +40,9 @@ ModfingerTunerAudioProcessorEditor::ModfingerTunerAudioProcessorEditor (Modfinge
     referenceLabel_.setText (juce::String (cachedRefHz_, 1) + " Hz", juce::dontSendNotification);
     addAndMakeVisible (referenceLabel_);
 
+    // Apply the current skin (colours come from the "skin" parameter).
+    applySkin (processorRef_.apvts.getRawParameterValue ("skin")->load());
+
     // Timer for display updates (~25 Hz)
     startTimerHz (25);
 }
@@ -55,8 +54,27 @@ ModfingerTunerAudioProcessorEditor::~ModfingerTunerAudioProcessorEditor()
 }
 
 //==============================================================================
+void ModfingerTunerAudioProcessorEditor::applySkin (int index)
+{
+    palette_   = (index == 0) ? TunerPalette::darkOrange() : TunerPalette::eightiesNeon();
+    skinIndex_ = index;
+
+    tunerLAF_.setColour (juce::ResizableWindow::backgroundColourId, palette_.background);
+    referenceLabel_.setColour (juce::Label::textColourId,                  palette_.secondary);
+    referenceLabel_.setColour (juce::Label::textWhenEditingColourId,       palette_.primary);
+    referenceLabel_.setColour (juce::Label::backgroundWhenEditingColourId, palette_.panel);
+    referenceLabel_.setColour (juce::Label::outlineWhenEditingColourId,    palette_.primary);
+    referenceLabel_.repaint();
+}
+
+//==============================================================================
 void ModfingerTunerAudioProcessorEditor::timerCallback()
 {
+    // React to skin changes coming from the host.
+    const int skinIdx = static_cast<int> (processorRef_.apvts.getRawParameterValue ("skin")->load());
+    if (skinIdx != skinIndex_)
+        applySkin (skinIdx);
+
     const float rawFreq         = processorRef_.getDisplayFrequency();
     const float rawAperiodicity = processorRef_.getDisplayAperiodicity();
     cachedRefHz_ = processorRef_.apvts.getRawParameterValue ("reference")->load();
@@ -103,13 +121,13 @@ void ModfingerTunerAudioProcessorEditor::paint (juce::Graphics& g)
     const auto w = static_cast<float> (getWidth());
 
     // Background
-    g.fillAll (juce::Colour (0xff1a1a1e));
+    g.fillAll (palette_.background);
 
     const bool showNote = displayState_ != DisplayState::listening;   // tracking or holding
     const float fade    = holdFadeAlpha_;                             // ~1.0 tracking, dim while holding
     const bool confident = cachedAperiodicity_ < kConfidentAperiodicity;
-    const auto noteColour = confident ? juce::Colour (0xffe0743b)
-                                      : juce::Colour (0xff5a5a60);
+    const auto noteColour = confident ? palette_.primary
+                                      : palette_.muted;
 
     const float noteTop = 16.0f;
     const float noteH   = 96.0f;
@@ -118,7 +136,7 @@ void ModfingerTunerAudioProcessorEditor::paint (juce::Graphics& g)
     // ── Note + octave (or "listening…") ───────────────────────────
     if (! showNote)
     {
-        g.setColour (juce::Colour (0xff5a5a62));
+        g.setColour (palette_.muted);
         g.setFont (juce::Font { juce::FontOptions { 22.0f } });
         g.drawText ("listening...", juce::Rectangle<float> (0, noteTop, w, noteH + 24.0f),
                     juce::Justification::centred, false);
@@ -166,7 +184,7 @@ void ModfingerTunerAudioProcessorEditor::paint (juce::Graphics& g)
     const auto barCentre = barX + barW * 0.5f;
 
     // Bar background
-    g.setColour (juce::Colour (0xff2a2a30));
+    g.setColour (palette_.panel);
     g.fillRoundedRectangle (barX - 2.0f, barY - 2.0f, barW + 4.0f, barH + 4.0f, 4.0f);
 
     // Green in-tune zone (±5 cents) — lights up when the needle is inside it
@@ -175,17 +193,17 @@ void ModfingerTunerAudioProcessorEditor::paint (juce::Graphics& g)
     const auto greenRight = barCentre + 5.0f * zonePixelsPerCent;
     const bool inTune = displayState_ == DisplayState::tracking
                         && std::abs (static_cast<float> (cachedCents_)) <= 5.0f;
-    const auto zoneColour = inTune ? juce::Colour (0xff3fd66b).withAlpha (0.85f)
-                                   : juce::Colour (0xff22aa44).withAlpha (0.22f);
+    const auto zoneColour = inTune ? palette_.zoneLit.withAlpha (0.85f)
+                                   : palette_.zoneIdle.withAlpha (0.22f);
     g.setColour (zoneColour);
     g.fillRect (greenLeft, barY, greenRight - greenLeft, barH);
 
     // Center marker
-    g.setColour (juce::Colour (0xff888890));
+    g.setColour (palette_.marker);
     g.drawVerticalLine (static_cast<int> (barCentre), barY - 4.0f, barY + barH + 4.0f);
 
     // Cents markings
-    g.setColour (juce::Colour (0xff5a5a62));
+    g.setColour (palette_.muted);
     g.setFont (juce::Font { juce::FontOptions { 9.0f } });
     g.drawText ("-50",  juce::Rectangle<float> (barX - 14, barY + barH + 6, 28, 14),
                 juce::Justification::centred, false);
@@ -201,7 +219,7 @@ void ModfingerTunerAudioProcessorEditor::paint (juce::Graphics& g)
         const float needleX = barCentre + clampedCents * zonePixelsPerCent;
 
         const auto needleAlpha = confident ? 1.0f : 0.4f;
-        g.setColour (juce::Colour (0xffe0743b).withAlpha (needleAlpha * fade));
+        g.setColour (palette_.primary.withAlpha (needleAlpha * fade));
         g.drawVerticalLine (static_cast<int> (needleX), barY - 6.0f, barY + barH + 6.0f);
         g.drawVerticalLine (static_cast<int> (needleX - 1.0f), barY - 6.0f, barY + barH + 6.0f);  // 2px thick
 
@@ -213,7 +231,7 @@ void ModfingerTunerAudioProcessorEditor::paint (juce::Graphics& g)
         g.fillPath (needleTip);
 
         // Frequency readout
-        g.setColour (juce::Colour (0xffa0a0a8).withAlpha (fade));
+        g.setColour (palette_.secondary.withAlpha (fade));
         g.setFont (juce::Font { juce::FontOptions { 13.0f } });
         g.drawText (juce::String (smoothedFreq_, 1) + " Hz",
                     juce::Rectangle<float> (0, barY + barH + 28.0f, w, 18.0f),

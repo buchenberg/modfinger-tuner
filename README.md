@@ -166,6 +166,10 @@ Options (both on by default):
 | Parameter | Range | Default | Description |
 |-----------|-------|---------|-------------|
 | `reference` | 415–466 Hz | 440 Hz | A4 reference frequency used for note/cents mapping. Editable via the Hz label. |
+| `skin` | `Dark` / `80s Neon` | `80s Neon` | Colour theme. Switchable from the host and saved with plugin state. |
+
+Themes are defined as `TunerPalette` presets in `source/TunerPalette.h` — add a
+new factory there and an entry in the `skin` parameter's choices to ship another skin.
 
 Plugin state (parameter values) is saved/restored via the host.
 

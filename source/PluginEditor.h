@@ -2,6 +2,7 @@
 
 #include "PluginProcessor.h"
 #include "Pitch.h"
+#include "TunerPalette.h"
 
 //==============================================================================
 /** Flat modern LookAndFeel for Modfinger Tuner — dark + orange theme. */
@@ -31,6 +32,9 @@ public:
 private:
     void timerCallback() override;
 
+    // Apply a colour skin by parameter index (0 = Dark, 1 = 80s Neon, …).
+    void applySkin (int index);
+
     // Advance width of a single-line string (replaces deprecated Font::getStringWidthFloat).
     static float textWidth (const juce::Font&, const juce::String&);
 
@@ -39,6 +43,10 @@ private:
 
     // Reference pitch label (click to edit)
     juce::Label referenceLabel_;
+
+    // Active colour skin (driven by the "skin" parameter).
+    TunerPalette palette_ { TunerPalette::eightiesNeon() };
+    int skinIndex_ = -1;   // last applied skin index; -1 forces apply on first use
 
     // Smoothed detected frequency; 0.0f means "no signal".
     float smoothedFreq_ = 0.0f;

@@ -26,7 +26,10 @@ ModfingerTunerAudioProcessor::createParameterLayout()
         std::make_unique<AudioParameterFloat> (
             ParameterID { "reference", 1 }, "Reference",
             NormalisableRange<float> (415.0f, 466.0f, 0.1f), 440.0f,
-            AudioParameterFloatAttributes{}.withLabel ("Hz"))
+            AudioParameterFloatAttributes{}.withLabel ("Hz")),
+        std::make_unique<AudioParameterChoice> (
+            ParameterID { "skin", 1 }, "Skin",
+            StringArray { "Dark", "80s Neon" }, 1)
     };
 }
 

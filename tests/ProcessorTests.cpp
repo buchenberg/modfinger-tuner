@@ -51,6 +51,13 @@ public:
             const float after = restored.apvts.getRawParameterValue ("reference")->load();
             expectWithinAbsoluteError (after, before, 0.15f, "round-trip value");
         }
+
+        beginTest ("Skin parameter defaults to 80s Neon");
+        {
+            ModfingerTunerAudioProcessor proc;
+            const float skinDefault = proc.apvts.getRawParameterValue ("skin")->load();
+            expectWithinAbsoluteError (skinDefault, 1.0f, 1.0e-4f, "default skin index");
+        }
     }
 };
 
