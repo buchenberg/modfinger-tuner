@@ -46,6 +46,7 @@ target_sources(ModfingerTuner
         source/PluginProcessor.cpp
         source/PluginEditor.cpp
         source/dsp/PyinDetector.cpp
+        source/ui/SkinManager.cpp
         source/ui/SkinLibrary.cpp)
 
 target_include_directories(ModfingerTuner PRIVATE source)
@@ -108,6 +109,7 @@ if (MODFINGER_BUILD_JUCE_TESTS)
         source/PluginProcessor.cpp
         source/PluginEditor.cpp
         source/dsp/PyinDetector.cpp
+        source/ui/SkinManager.cpp
         source/ui/SkinLibrary.cpp)
 
     target_compile_definitions(ModfingerTunerJuceTests PRIVATE

@@ -50,16 +50,11 @@ ModfingerTunerAudioProcessorEditor::ModfingerTunerAudioProcessorEditor (Modfinge
     referenceLabel_.setText (juce::String (cachedRefHz_, 1) + " Hz", juce::dontSendNotification);
     addAndMakeVisible (referenceLabel_);
 
-    // ── Skin selector button ──────────────────────────────────────
-    // Bottom-right pill that opens a themed popup listing all runtime
-    // skins (bundled + user-imported).
-    skinButton_.onClick = [this] { showSkinMenu(); };
-    addAndMakeVisible (skinButton_);
-
-    // Load the runtime skin library (bundled defaults + user folder)
-    // and apply whichever skin the processor last saved.
-    skinLibrary_.reload();
-    applySkinByName (processorRef_.getSkinName());
+    // ── Skin system (delegated to SkinManager) ────────────────────
+    skinManager_.initialise (processorRef_, tunerLAF_, referenceLabel_);
+    addAndMakeVisible (skinManager_.getButton());
+    skinManager_.reloadAndApply();
+    palette_ = skinManager_.getPalette();   // sync for first paint
 
     // ── 25 Hz display timer ───────────────────────────────────────
     // Paints the UI at ~25 fps.  The pYIN detector runs at ~43 Hz,
@@ -72,112 +67,6 @@ ModfingerTunerAudioProcessorEditor::~ModfingerTunerAudioProcessorEditor()
 {
     stopTimer();
     setLookAndFeel (nullptr);
-}
-
-//==============================================================================
-//  applySkinByName  — look up a skin by name in the runtime library and push
-//  its palette into the LookAndFeel, the reference label, the skin-button
-//  colours, and the popup-menu theme.  Falls back to "80s Neon" → first skin.
-//==============================================================================
-void ModfingerTunerAudioProcessorEditor::applySkinByName (const juce::String& name)
-{
-    const Skin* skin = skinLibrary_.findByName (name);
-
-    // Fallback chain: requested name → "80s Neon" → first available skin.
-    if (skin == nullptr) skin = skinLibrary_.findByName ("80s Neon");
-    if (skin == nullptr && ! skinLibrary_.skins().empty())
-        skin = &skinLibrary_.skins().front();
-    if (skin == nullptr) return;   // no skins in library at all
-
-    activeSkinName_ = skin->name;
-    palette_        = skin->palette;
-
-    // Apply to the LookAndFeel (window background) and the reference label.
-    tunerLAF_.setColour (juce::ResizableWindow::backgroundColourId, palette_.background);
-    referenceLabel_.setColour (juce::Label::textColourId,                  palette_.secondary);
-    referenceLabel_.setColour (juce::Label::textWhenEditingColourId,       palette_.primary);
-    referenceLabel_.setColour (juce::Label::backgroundWhenEditingColourId, palette_.panel);
-    referenceLabel_.setColour (juce::Label::outlineWhenEditingColourId,    palette_.primary);
-    referenceLabel_.repaint();
-
-    // Skin selector button — a subtle pill matching the palette.
-    skinButton_.setColour (juce::TextButton::buttonColourId,    palette_.panel);
-    skinButton_.setColour (juce::TextButton::buttonOnColourId,  palette_.panel);
-    skinButton_.setColour (juce::TextButton::textColourOffId,   palette_.secondary);
-    skinButton_.setColour (juce::TextButton::textColourOnId,    palette_.primary);
-    skinButton_.setButtonText ("Skin: " + activeSkinName_);
-
-    // The themed popup menu (the button inherits the editor's LookAndFeel,
-    // so setting colours on `tunerLAF_` themes the popup too).
-    tunerLAF_.setColour (juce::PopupMenu::backgroundColourId,            palette_.panel);
-    tunerLAF_.setColour (juce::PopupMenu::textColourId,                  palette_.secondary);
-    tunerLAF_.setColour (juce::PopupMenu::highlightedBackgroundColourId, palette_.primary.withAlpha (0.25f));
-    tunerLAF_.setColour (juce::PopupMenu::highlightedTextColourId,       palette_.primary);
-
-    skinButton_.repaint();
-    repaint();
-}
-
-//==============================================================================
-//  showSkinMenu  — reload the skin library (to pick up newly-dropped files)
-//  and show a themed popup listing all skins, with Import and Open-dolder
-//  actions below a separator.
-//==============================================================================
-void ModfingerTunerAudioProcessorEditor::showSkinMenu()
-{
-    skinLibrary_.reload();   // scan the user folder for new .json files
-
-    juce::PopupMenu menu;
-    for (const auto& skin : skinLibrary_.skins())
-        menu.addItem (skin.name, true, skin.name == activeSkinName_,
-                      [this, n = skin.name] { selectSkin (n); });
-
-    menu.addSeparator();
-    menu.addItem ("Import skin...",        true, false, [this] { importSkin(); });
-    menu.addItem ("Open skins folder...",  true, false,
-                  [] { SkinLibrary::userFolder().startAsProcess(); });
-
-    juce::PopupMenu::Options opts;
-    opts = opts.withTargetComponent (&skinButton_).withMinimumWidth (150);
-    menu.showMenuAsync (opts);
-}
-
-//==============================================================================
-//  selectSkin  — persist a skin by name into the processor state and apply it.
-//==============================================================================
-void ModfingerTunerAudioProcessorEditor::selectSkin (const juce::String& name)
-{
-    processorRef_.setSkinName (name);
-    applySkinByName (name);
-}
-
-//==============================================================================
-//  importSkin  — open a native file-chooser, copy the selected .json into the
-//  user skins folder, reload, and select it.  Runs async (no modal loop).
-//==============================================================================
-void ModfingerTunerAudioProcessorEditor::importSkin()
-{
-    skinFileChooser_ = std::make_unique<juce::FileChooser> ("Import Skin",
-                                                            SkinLibrary::userFolder(), "*.json");
-    skinFileChooser_->launchAsync (juce::FileBrowserComponent::openMode
-                                        | juce::FileBrowserComponent::canSelectFiles,
-        [this] (const juce::FileChooser& fc)
-        {
-            const juce::File src = fc.getResult();
-            if (src == juce::File{})
-                return;                         // user cancelled
-
-            // Copy the file into the user folder (overwrites if same name).
-            const juce::File dst = SkinLibrary::userFolder().getChildFile (src.getFileName());
-            src.copyFileTo (dst);
-
-            // Parse the imported file to get the skin name, then reload and
-            // select it so the UI updates immediately.
-            const juce::String name = SkinLibrary::nameFromJson (src.loadFileAsString());
-            skinLibrary_.reload();
-            if (name.isNotEmpty())
-                selectSkin (name);
-        });
 }
 
 //==============================================================================
@@ -194,11 +83,12 @@ void ModfingerTunerAudioProcessorEditor::importSkin()
 void ModfingerTunerAudioProcessorEditor::timerCallback()
 {
     // ── React to host-initiated skin changes ──────────────────────
-    // If the host restored a saved state (setStateInformation), the
-    // skinName value may differ from what we last applied.
     const juce::String skinName = processorRef_.getSkinName();
-    if (skinName != activeSkinName_)
-        applySkinByName (skinName);
+    if (skinName != skinManager_.activeSkinName())
+    {
+        skinManager_.applySkinByName (skinName);
+        palette_ = skinManager_.getPalette();
+    }
 
     // ── Read atomic readouts from the audio thread ────────────────
     const float rawFreq         = processorRef_.getDisplayFrequency();
@@ -428,5 +318,5 @@ void ModfingerTunerAudioProcessorEditor::resized()
     // Bottom row: reference label (left) + skin selector (right).
     const int y = getHeight() - 40;
     referenceLabel_.setBounds (20, y, 120, 24);
-    skinButton_.setBounds (getWidth() - 140, y, 120, 24);
+    skinManager_.getButton().setBounds (getWidth() - 140, y, 120, 24);
 }

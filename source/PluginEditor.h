@@ -3,8 +3,7 @@
 #include "PluginProcessor.h"
 #include "dsp/Pitch.h"
 #include "ui/TunerPalette.h"
-#include "ui/SkinLibrary.h"
-#include <memory>
+#include "ui/SkinManager.h"
 
 //==============================================================================
 /** Flat LookAndFeel — dark theme defaults (overridden per‑skin by applySkinByName). */
@@ -45,19 +44,8 @@ public:
     void resized() override;
 
 private:
+    // ── Timer ─────────────────────────────────────────────────────
     void timerCallback() override;
-
-    // Apply a skin by name (looks it up in the runtime library).
-    void applySkinByName (const juce::String& name);
-
-    // Show the in-UI skin selector popup (reloads the library first).
-    void showSkinMenu();
-
-    // Select a skin by name: persist it and apply it.
-    void selectSkin (const juce::String& name);
-
-    // Open a file chooser to import a skin JSON into the user folder.
-    void importSkin();
 
     /** Measure the advance width of a single-line string using GlyphArrangement
         (replaces the deprecated Font::getStringWidthFloat). */
@@ -69,13 +57,10 @@ private:
     TunerLookAndFeel tunerLAF_;
 
     juce::Label referenceLabel_;                // click-to-edit reference pitch
-    juce::TextButton skinButton_;               // bottom-right skin selector pill
 
-    SkinLibrary skinLibrary_;                   // runtime skin loader
-    juce::String activeSkinName_;               // name of the currently applied skin
-    std::unique_ptr<juce::FileChooser> skinFileChooser_;   // async import chooser
+    SkinManager skinManager_;                   // runtime skin library, button, menu, import
 
-    TunerPalette palette_;                      // active skin's colour slots
+    TunerPalette palette_;                      // active skin's colour slots (synced from skinManager_)
 
     // ── Display state ──────────────────────────────────────────────
 
