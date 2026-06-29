@@ -82,17 +82,17 @@ modfinger-tuner/
 │   ├── PluginEditor.{h,cpp}      # Editor: smoothing, UI rendering, skin selector
 │   ├── dsp/
 │   │   ├── Pitch.h               # Pure 12-TET helpers: note/octave/cents (JUCE-free, testable)
-│   │   └── YinDetector.{h,cpp}   # Pure DSP: YIN pitch detector (JUCE-free, testable)
+│   │   └── PyinDetector.{h,cpp}  # pYIN pitch detector (YIN core + Viterbi, JUCE-free, testable)
 │   └── ui/
 │       ├── TunerPalette.h        # Semantic colour slots for a skin
 │       └── SkinLibrary.{h,cpp}   # Runtime JSON skin loader (bundled + user folder)
 └── tests/
     ├── PitchTests.cpp            # Catch2 unit tests for pitch math
-    ├── YinDetectorTests.cpp      # Catch2 unit tests for the detector on generated sines
+    ├── PyinDetectorTests.cpp     # Catch2 unit tests for the pYIN detector on generated sines
     └── ProcessorTests.cpp        # JUCE UnitTests: parameter range + state round-trip
 ```
 
-The DSP (`YinDetector`) and music-theory math (`Pitch`) are intentionally kept free of
+The DSP (`PyinDetector`) and music-theory math (`Pitch`) are intentionally kept free of
 JUCE dependencies so they can be unit-tested in isolation.
 
 ---
@@ -180,7 +180,7 @@ ctest --test-dir build --output-on-failure
 
 | Target | Framework | Covers |
 |--------|-----------|--------|
-| `ModfingerTunerTests` | Catch2 (fetched) | Pure logic: `pitch` note/cents math and `YinDetector` on generated sines. JUCE-free. |
+| `ModfingerTunerTests` | Catch2 (fetched) | Pure logic: `pitch` note/cents math and `PyinDetector` on generated sines. JUCE-free. |
 | `ModfingerTunerJuceTests` | JUCE `UnitTest` | JUCE-coupled seams: `reference` parameter range/default and the state save/restore round-trip. |
 
 Options (both on by default):
@@ -193,10 +193,11 @@ Options (both on by default):
 ## How it works
 
 1. **Mono sum** — stereo input is averaged to mono in `processBlock`.
-2. **YIN detection** — a 4096-sample ring buffer is analyzed every 1024 samples (~43 Hz).
-   The difference function (windowed, unrolled into contiguous order) → cumulative mean
-   normalized difference → absolute threshold → parabolic interpolation yields the
-   fundamental frequency and an aperiodicity score.
+2. **pYIN detection** — a 4096-sample ring buffer is analyzed every 1024 samples (~43 Hz).
+   The YIN difference function (windowed, unrolled into contiguous order) → CMND →
+   candidate extraction (≤5 voiced periods) → 12‑frame HMM / Viterbi decoding yields
+   the fundamental frequency and an aperiodicity score. The Viterbi smooths continuity
+   and rejects octave errors.
 3. **Cross-thread hand-off** — only `frequency` and `aperiodicity` (both
    `std::atomic<float>`) are written on the audio thread.
 4. **UI** — a 25 Hz timer smooths the frequency on the message thread and derives the note

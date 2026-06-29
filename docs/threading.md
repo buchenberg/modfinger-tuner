@@ -30,7 +30,7 @@ complex object leaves the audio thread. This is an intentional design choice:
 - Eliminates data-race UB on `juce::String` (its ref-count is atomic, but assignment
   threading is not defined).
 - Makes `Pitch.h` unit-testable without JUCE (it depends only on `<cmath>`).
-- Keeps the audio thread light (only `YinDetector` + two atomic stores).
+- Keeps the audio thread light (only `PyinDetector` + two atomic stores).
 
 ## Message-thread state machine
 
@@ -42,7 +42,7 @@ at what opacity. See [architecture.md](architecture.md#display-state-machine).
 
 - JUCE guarantees `processBlock` is called sequentially (not re-entrant) on the audio
   thread for a given plugin instance.
-- `YinDetector` is NOT thread-safe — it is called only from `processBlock`.
+- `PyinDetector` is NOT thread-safe — it is called only from `processBlock`.
 - The mono accumulation buffer (`monoBuffer_`) is resized per block (O(1) if size
   unchanged) — fine for the audio thread.
 - `displayFreq_` and `displayAperiodicity_` stores are the only point of cross-thread

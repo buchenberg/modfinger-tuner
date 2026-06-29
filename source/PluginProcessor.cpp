@@ -47,7 +47,7 @@ void ModfingerTunerAudioProcessor::changeProgramName (int, const juce::String&) 
 void ModfingerTunerAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     juce::ignoreUnused (samplesPerBlock);
-    yinDetector_.prepare (sampleRate);
+    pyinDetector_.prepare (sampleRate);
     monoBuffer_.resize (static_cast<size_t> (samplesPerBlock));
 }
 
@@ -96,11 +96,11 @@ void ModfingerTunerAudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
             monoBuffer_[static_cast<size_t> (i)] = (left[i] + right[i]) * 0.5f;
     }
 
-    yinDetector_.processBlock (monoBuffer_.data(), numSamples);
+    pyinDetector_.processBlock (monoBuffer_.data(), numSamples);
 
     // Push lightweight readouts to the UI thread.
-    displayFreq_.store (yinDetector_.getFrequency(), std::memory_order_relaxed);
-    displayAperiodicity_.store (yinDetector_.getAperiodicity(), std::memory_order_relaxed);
+    displayFreq_.store (pyinDetector_.getFrequency(), std::memory_order_relaxed);
+    displayAperiodicity_.store (pyinDetector_.getAperiodicity(), std::memory_order_relaxed);
 }
 
 //==============================================================================

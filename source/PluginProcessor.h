@@ -7,7 +7,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 
-#include "dsp/YinDetector.h"
+#include "dsp/PyinDetector.h"
 
 //==============================================================================
 class ModfingerTunerAudioProcessor : public juce::AudioProcessor
@@ -63,7 +63,7 @@ public:
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    YinDetector yinDetector_;
+    PyinDetector pyinDetector_;
 
     // Mono accumulation buffer (averages stereo → mono per block)
     std::vector<float> monoBuffer_;

@@ -4,7 +4,7 @@ Two test suites run via CTest. Both are built alongside the plugin.
 
 | Target | Framework | What it covers | Builds without | Source |
 |--------|-----------|----------------|----------------|--------|
-| `ModfingerTunerTests` | Catch2 (v3.5, fetched) | Pure units: `pitch` math and `YinDetector` on generated sines. **JUCE-free.** | JUCE (links only `Catch2::Catch2WithMain` + `YinDetector.cpp`) | `tests/PitchTests.cpp`, `tests/YinDetectorTests.cpp` |
+| `ModfingerTunerTests` | Catch2 (v3.5, fetched) | Pure units: `pitch` math, `PyinDetector` on generated sines. **JUCE-free.** | JUCE (links only `Catch2::Catch2WithMain` + `PyinDetector.cpp`) | `tests/PitchTests.cpp`, `tests/PyinDetectorTests.cpp` |
 | `ModfingerTunerJuceTests` | JUCE `UnitTest` | JUCE-coupled seams: `reference` parameter range/default, skin-name state round-trip. | Network (no FetchContent — uses JUCE's built-in runner) | `tests/ProcessorTests.cpp` |
 
 ## Build and run
@@ -36,13 +36,14 @@ ctest --test-dir build --output-on-failure
 - Reference shift transposes without changing the tone (440 Hz against 442 Hz ref = still A4, slightly flat).
 - Note index wraps at octave boundaries (MIDI 0 = C-1, MIDI 11 = B-1, MIDI 71 = B4).
 
-### `YinDetectorTests.cpp`
-- Pure 440 Hz sine → detected within ±1 Hz, aperiodicity < 0.1.
-- 220 Hz sine → detected within ±1 Hz.
-- Silence → aperiodicity ≥ 0.3 (no false detection).
+### `PyinDetectorTests.cpp`
+- Pure 440 Hz sine → detected within ±2 Hz after Viterbi warm-up, aperiodicity < 0.2.
+- 220 Hz sine → detected within ±2 Hz.
+- Silence → reported as unvoiced (aperiodicity ≥ 0.3).
+- 440→880 Hz step change → Viterbi follows after the window flushes (±20 Hz tolerance during transition).
 
-The YIN tests feed a generated sine wave through `processBlock` in 512-sample chunks,
-filling the ring buffer over 4 full rotations before checking the output.
+The pYIN tests feed a generated sine wave through `processBlock` in 512-sample chunks,
+filling the ring buffer and the 12‑frame Viterbi window before checking the output.
 
 ## What the JUCE UnitTests cover
 

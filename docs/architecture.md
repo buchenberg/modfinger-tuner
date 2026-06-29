@@ -12,15 +12,15 @@ Stereo input
   ├─ Passthrough: copied to output (dry, no DSP)
   └─ Mono sum: (L + R) / 2
        │
-       └─ YinDetector::processBlock → ring buffer (4096 samples)
+       └─ PyinDetector::processBlock → ring buffer (4096 samples)
             │
             Every 1024 samples (≈43 Hz detection rate):
             │
-            └─ YinDetector::runDetection()
+            └─ PyinDetector::runDetection()
                  ├─ Difference function d(τ) over analysis window 2048
                  ├─ Cumulative-mean normalised difference
-                 ├─ Absolute threshold → local minimum
-                 ├─ Parabolic interpolation → period
+                 ├─ Candidate extraction (≤5 voiced periods, sorted)
+                 ├─ HMM / Viterbi decoding (12-frame sliding window)
                  └─ Stores { frequency, aperiodicity } as atomics
 ```
 
@@ -76,7 +76,7 @@ Hold lasts `kHoldTicks` = 125 ticks ≈ 5 s at 25 Hz.
 | `source/PluginProcessor.{h,cpp}` | `AudioProcessor`: bus config, processBlock, atomics, state |
 | `source/PluginEditor.{h,cpp}` | Timer, smoothing, displayState, paint, skin selector |
 | `source/dsp/Pitch.h` | Pure 12-TET helpers: midiNote, cents, NoteInfo (no JUCE) |
-| `source/dsp/YinDetector.{h,cpp}` | Pure YIN DSP (no JUCE), unit-tested with Catch2 |
+| `source/dsp/PyinDetector.{h,cpp}` | pYIN detector (YIN core + Viterbi decoder, no JUCE), unit-tested with Catch2 |
 | `source/ui/TunerPalette.h` | Semantic colour-slot struct |
 | `source/ui/SkinLibrary.{h,cpp}` | Runtime JSON skin loader (bundled + user folder) |
 | `skins/dark.json`, `skins/eighties_neon.json` | Bundled default skins (BinaryData) |

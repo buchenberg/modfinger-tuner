@@ -45,7 +45,7 @@ target_sources(ModfingerTuner
     PRIVATE
         source/PluginProcessor.cpp
         source/PluginEditor.cpp
-        source/dsp/YinDetector.cpp
+        source/dsp/PyinDetector.cpp
         source/ui/SkinLibrary.cpp)
 
 target_include_directories(ModfingerTuner PRIVATE source)
@@ -85,8 +85,8 @@ if (MODFINGER_BUILD_TESTS)
     # Tests cover the pure DSP/logic units only — no JUCE dependency needed.
     add_executable(ModfingerTunerTests
         tests/PitchTests.cpp
-        tests/YinDetectorTests.cpp
-        source/dsp/YinDetector.cpp)
+        tests/PyinDetectorTests.cpp
+        source/dsp/PyinDetector.cpp)
 
     set_target_properties(ModfingerTunerTests PROPERTIES
         CXX_STANDARD 17
@@ -107,7 +107,7 @@ if (MODFINGER_BUILD_JUCE_TESTS)
         tests/ProcessorTests.cpp
         source/PluginProcessor.cpp
         source/PluginEditor.cpp
-        source/dsp/YinDetector.cpp
+        source/dsp/PyinDetector.cpp
         source/ui/SkinLibrary.cpp)
 
     target_compile_definitions(ModfingerTunerJuceTests PRIVATE
