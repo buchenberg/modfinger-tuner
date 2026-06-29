@@ -1,25 +1,11 @@
 # Modfinger Tuner
 
 A real-time, monophonic **chromatic tuner** audio plugin built with [JUCE](https://juce.com/).
-It uses the **YIN** fundamental-frequency estimator (De Cheveigné & Kawahara, 2002) to detect
-pitch from an incoming audio signal and displays the note, octave, and a cents-tuning meter.
+It uses the **pYIN** probabilistic pitch detector (Mauch & Dixon, 2012 — a Viterbi‑smoothed
+upgrade of the YIN algorithm) to detect pitch from an incoming audio signal and displays
+the note, octave, and a cents-tuning meter.
 
 Available as **VST3**, **AU**, and a **Standalone** app (macOS).
-
-<img alt="80s skin" src="./docs/80s_skin.png" width="400">
-
-
-## Features
-
-- **YIN pitch detection** — accurate monophonic fundamental-frequency estimation with
-  parabolic interpolation and an aperiodicity (confidence) measure.
-- **Tuning meter** — note name + octave and a ±50 cents needle with an in-tune green zone.
-- **Confidence-aware UI** — dimmed readouts when the signal is aperiodic/noisy; a
-  "listening…" state when no pitch is present.
-- **Editable reference pitch** — click the Hz label at the bottom to retune A4
-  (415–466 Hz).
-- **Low-overhead audio path** — detection runs every 512 samples; only two floats cross
-  the audio→UI thread boundary (via atomics).
 
 ---
 
@@ -78,8 +64,8 @@ modfinger-tuner/
 ├── docs/                         # Architecture docs (see docs/)
 │   └── skins/                    # Extra importable skin files (copy into the user folder)
 ├── source/
-│   ├── PluginProcessor.{h,cpp}   # AudioProcessor: mono sum, drives YIN, pushes atomics
-│   ├── PluginEditor.{h,cpp}      # Editor: smoothing, UI rendering, skin selector
+│   ├── PluginProcessor.{h,cpp}   # AudioProcessor: mono sum, drives pYIN, pushes atomics
+│   ├── PluginEditor.{h,cpp}      # Editor: display state machine, paint, skin selector
 │   ├── dsp/
 │   │   ├── Pitch.h               # Pure 12-TET helpers: note/octave/cents (JUCE-free, testable)
 │   │   └── PyinDetector.{h,cpp}  # pYIN pitch detector (YIN core + Viterbi, JUCE-free, testable)

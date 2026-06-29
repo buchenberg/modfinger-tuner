@@ -4,7 +4,7 @@ The plugin runs on two threads:
 
 | Thread | JUCE name | Responsibility |
 |--------|-----------|----------------|
-| Audio thread | `processBlock` callback | Mono sum, YIN detection, store atomics |
+| Audio thread | `processBlock` callback | Mono sum, pYIN detection, store atomics |
 | Message thread | `timerCallback` (25 Hz), `paint` | Smoothing, display state machine, repaint, skin logic |
 
 ## Cross-thread data
@@ -17,7 +17,7 @@ std::atomic<float> displayFreq_        { 0.0f };
 std::atomic<float> displayAperiodicity_ { 1.0f };
 ```
 
-They are stored in `processBlock` after YIN runs and read in `timerCallback`. The stores
+They are stored in `processBlock` after pYIN runs and read in `timerCallback`. The stores
 explicitly use `std::memory_order_relaxed` (correct for a single-reader, single-writer
 pattern with no ordering requirements between the two values).
 

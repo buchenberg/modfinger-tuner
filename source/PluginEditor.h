@@ -7,7 +7,7 @@
 #include <memory>
 
 //==============================================================================
-/** Flat modern LookAndFeel for Modfinger Tuner — dark + orange theme. */
+/** Flat LookAndFeel — dark theme defaults (overridden per‑skin by applySkinByName). */
 struct TunerLookAndFeel : public juce::LookAndFeel_V4
 {
     TunerLookAndFeel()
@@ -21,6 +21,19 @@ struct TunerLookAndFeel : public juce::LookAndFeel_V4
 };
 
 //==============================================================================
+/** Plugin editor — timer‑driven UI for the tuner.
+
+    Runs a 25 Hz timer on the JUCE message thread.  Every tick:
+      1. Reads the atomics (frequency + aperiodicity) from the processor.
+      2. Runs the 3‑state display machine (tracking / holding / listening).
+      3. Eases the hold‑fade alpha for smooth visual transitions.
+      4. Checks for host‑initiated skin changes.
+      5. Calls repaint().
+
+    The skin system is fully runtime‑driven — bundled defaults + imported user
+    skins (see SkinLibrary).  The active skin is persisted by name in plugin
+    state, not as a host parameter.
+*/
 class ModfingerTunerAudioProcessorEditor : public juce::AudioProcessorEditor,
                                             private juce::Timer
 {
@@ -46,51 +59,50 @@ private:
     // Open a file chooser to import a skin JSON into the user folder.
     void importSkin();
 
-    // Advance width of a single-line string (replaces deprecated Font::getStringWidthFloat).
+    /** Measure the advance width of a single-line string using GlyphArrangement
+        (replaces the deprecated Font::getStringWidthFloat). */
     static float textWidth (const juce::Font&, const juce::String&);
+
+    // ── Members ────────────────────────────────────────────────────
 
     ModfingerTunerAudioProcessor& processorRef_;
     TunerLookAndFeel tunerLAF_;
 
-    // Reference pitch label (click to edit)
-    juce::Label referenceLabel_;
+    juce::Label referenceLabel_;                // click-to-edit reference pitch
+    juce::TextButton skinButton_;               // bottom-right skin selector pill
 
-    // Skin selector (opens a themed popup listing runtime skins)
-    juce::TextButton skinButton_;
+    SkinLibrary skinLibrary_;                   // runtime skin loader
+    juce::String activeSkinName_;               // name of the currently applied skin
+    std::unique_ptr<juce::FileChooser> skinFileChooser_;   // async import chooser
 
-    // Runtime skin library (bundled defaults + imported user skins)
-    SkinLibrary skinLibrary_;
-    juce::String activeSkinName_;
-    std::unique_ptr<juce::FileChooser> skinFileChooser_;
+    TunerPalette palette_;                      // active skin's colour slots
 
-    // Active colour skin.
-    TunerPalette palette_;
+    // ── Display state ──────────────────────────────────────────────
 
-    // Smoothed detected frequency; 0.0f means "no signal".
-    float smoothedFreq_ = 0.0f;
+    float smoothedFreq_ = 0.0f;                 // 0 = no signal / unvoiced
 
-    // Current readout state: tracking a live pitch, holding (dimmed) the last
-    // note, or idle ("listening…").
+    /** Three readout states driven by the pYIN output:
+        - tracking  — pitch present, full brightness
+        - holding   — pitch just stopped, dimmed for ~5 s
+        - listening — hold expired, "listening…" placeholder  */
     enum class DisplayState { tracking, holding, listening };
     DisplayState displayState_ = DisplayState::listening;
 
-    // Ticks left to keep showing the last note after the signal drops, before
-    // reverting to "listening…".
-    int holdTicksRemaining_ = 0;
+    int   holdTicksRemaining_ = 0;              // countdown from kHoldTicks (≈5 s @ 25 Hz)
+    float holdFadeAlpha_      = 1.0f;           // eased between 1.0 and kHoldFadeAlpha
 
-    // Eased alpha applied to the readout while holding (1.0 → kHoldFadeAlpha).
-    float holdFadeAlpha_ = 1.0f;
+    // ── Cached display values (derived on the message thread) ──────
 
-    // Display values derived on the message thread (from the atomic frequency).
-    pitch::NoteInfo cachedNote_   { "A", 4 };
+    pitch::NoteInfo cachedNote_   { "A", 4 };   // default is A4
     double          cachedCents_  = 0.0;
-    float           cachedAperiodicity_ = 1.0f;
+    float           cachedAperiodicity_ = 1.0f; // starts undecided
     float           cachedRefHz_        = 440.0f;
 
-    // Tuning constants
-    static constexpr float kConfidentAperiodicity = 0.2f;
-    static constexpr int   kHoldTicks             = 125;   // ~5 s @ 25 Hz: how long the last note lingers
-    static constexpr float kHoldFadeAlpha         = 0.35f; // dimmed level while holding the last note
+    // ── Tuning constants ───────────────────────────────────────────
+
+    static constexpr float kConfidentAperiodicity = 0.2f;  // below this → confident note colour
+    static constexpr int   kHoldTicks             = 125;   // ≈5 s at 25 Hz
+    static constexpr float kHoldFadeAlpha         = 0.35f; // dimmed alpha during holding
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModfingerTunerAudioProcessorEditor)
 };
