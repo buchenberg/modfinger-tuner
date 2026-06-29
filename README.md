@@ -7,6 +7,8 @@ the note, octave, and a cents-tuning meter.
 
 Available as **VST3**, **AU**, and a **Standalone** app (macOS).
 
+<img alt="80s skin" src="./docs/80s_skin.png" width="400">
+
 ---
 
 ## Requirements
