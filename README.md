@@ -60,7 +60,6 @@ updated submodule pointer (e.g. `cd JUCE && git checkout 8.0.x && cd .. && git a
 ```
 modfinger-tuner/
 ├── CMakeLists.txt
-├── AGENTS.md                     # Quick-reference for AI-assisted dev
 ├── JUCE/                         # JUCE 8.0.12 (git submodule)
 ├── skins/                        # JSON skin files (bundled defaults + templates to import)
 ├── docs/                         # Architecture docs (see docs/)
