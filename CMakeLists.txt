@@ -30,7 +30,7 @@ juce_add_binary_data(ModfingerSkinsData
     SOURCES skins/dark.json skins/eighties_neon.json)
 
 juce_add_plugin(ModfingerTuner
-    COMPANY_NAME "Modfinger"
+    COMPANY_NAME "Gregory Buchenberger"
     PLUGIN_MANUFACTURER_CODE Mdfg
     PLUGIN_CODE Md01
     FORMATS AU VST3 Standalone
