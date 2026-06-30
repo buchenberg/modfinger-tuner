@@ -72,7 +72,8 @@ modfinger-tuner/
 │   │   └── PyinDetector.{h,cpp}  # pYIN pitch detector (YIN core + Viterbi, JUCE-free, testable)
 │   └── ui/
 │       ├── TunerPalette.h        # Semantic colour slots for a skin
-│       └── SkinLibrary.{h,cpp}   # Runtime JSON skin loader (bundled + user folder)
+│       ├── SkinLibrary.{h,cpp}   # Runtime JSON skin loader (bundled + user folder)
+│       └── SkinManager.{h,cpp}   # Skin selector button, themed popup menu, import flow
 └── tests/
     ├── PitchTests.cpp            # Catch2 unit tests for pitch math
     ├── PyinDetectorTests.cpp     # Catch2 unit tests for the pYIN detector on generated sines

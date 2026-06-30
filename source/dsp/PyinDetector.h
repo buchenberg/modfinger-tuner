@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <array>
 #include <cmath>
 
 //==============================================================================
@@ -52,6 +53,11 @@ private:
     static constexpr int detectInterval_  = 1024;         // samples between YIN runs
     static constexpr int analysisWindow_  = bufferSize_ / 2;  // diff-function window
 
+    // ── pYIN / Viterbi dimensions ────────────────────────────────
+    static constexpr int kMaxCandidates     = 5;                  // voiced hypotheses kept per frame
+    static constexpr int kMaxStates         = kMaxCandidates + 1; // + unvoiced state
+    static constexpr int kCandidateCapacity = 32;                 // reserved collection capacity (see prepare())
+
     std::vector<float> ringBuffer_;        // length bufferSize_
     std::vector<float> linear_;            // contiguous unrolled copy of ringBuffer_
     int writePos_              = 0;        // next ring-buffer write index
@@ -65,24 +71,42 @@ private:
     // ── Candidate extraction ──────────────────────────────────────
     struct Candidate
     {
-        double period;          // interpolated period in samples
-        double aperiodicity;    // CMND value at the dip (0 = perfect match)
+        double period       = 0.0;   // interpolated period in samples
+        double aperiodicity = 1.0;   // CMND value at the dip (0 = perfect match)
     };
-    std::vector<Candidate> candidates_;   // up to 5, sorted best-first
+    std::vector<Candidate> candidates_;   // current frame's hypotheses; reserved in prepare() (≤ kCandidateCapacity)
 
     // ── Viterbi state ─────────────────────────────────────────────
-    /** One detection frame as seen by the HMM. */
+    /** One detection frame as seen by the HMM.  Uses a fixed-size candidate
+        array so the audio-thread decode path performs no heap allocation. */
     struct Frame
     {
-        std::vector<Candidate> candidates;   // voiced period hypotheses
-        double unvoicedWeight = 0.0;          // observation weight of the
-    };                                        //   unvoiced (noise) state
+        Candidate candidates[kMaxCandidates];   // voiced period hypotheses
+        int       numCandidates  = 0;            // valid entries (≤ kMaxCandidates)
+        double    unvoicedWeight = 0.0;          // observation weight of the unvoiced (noise) state
+    };
 
-    static constexpr int kViterbiWindow = 12; // frames in the sliding window
+    static constexpr int kViterbiWindow = 12;    // frames in the sliding window
 
-    std::vector<Frame> viterbiFrames_;        // circular buffer, length kViterbiWindow
-    int viterbiWritePos_   = 0;               // next write slot
-    int viterbiFrameCount_ = 0;               // frames filled so far (≤ kViterbiWindow)
+    std::vector<Frame> viterbiFrames_;           // circular buffer, length kViterbiWindow
+    int viterbiWritePos_   = 0;                  // next write slot
+    int viterbiFrameCount_ = 0;                  // frames filled so far (≤ kViterbiWindow)
+
+    /** Flattened index into the per-frame state scratch arrays: row `frame`,
+        column `state`. */
+    static constexpr int cellIndex (int frame, int state) noexcept
+    {
+        return frame * kMaxStates + state;
+    }
+
+    // Viterbi forward-pass scratch — sized to the worst case (kViterbiWindow
+    // frames × kMaxStates states) and pre-allocated as members so the audio
+    // thread performs zero heap allocations during decoding.  No backtracking
+    // pointer (psi) array is stored: only the winning state at the latest
+    // frame is needed, so the path is never reconstructed.
+    std::array<double, static_cast<size_t> (kViterbiWindow * kMaxStates)> logObs_;
+    std::array<double, static_cast<size_t> (kViterbiWindow * kMaxStates)> logDelta_;
+    std::array<int,    static_cast<size_t> (kViterbiWindow)>              stateCounts_;
 
     // ── Output ────────────────────────────────────────────────────
     float detectedFreq_ = 0.0f;     // Hz; 0.0 means unvoiced / no pitch

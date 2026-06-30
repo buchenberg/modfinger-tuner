@@ -54,3 +54,5 @@ cmake-build-*/
 *.vst3
 *.component
 *.app
+
+JUCE/

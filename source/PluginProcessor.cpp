@@ -120,7 +120,7 @@ void ModfingerTunerAudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
     }
 
     // ── Mono sum ──────────────────────────────────────────────────
-    // pYIN expects a single channel.  Average stereo to mono.
+    // pYIN expects a single channel.  Down-mix to mono.
     monoBuffer_.resize (static_cast<size_t> (numSamples));
     if (numChannels == 1)
     {
@@ -130,11 +130,14 @@ void ModfingerTunerAudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
     }
     else
     {
-        // Multi-channel — average all channels (typically 2 for stereo).
-        const auto* left  = buffer.getReadPointer (0);
-        const auto* right = buffer.getReadPointer (1);
+        // Multi-channel — average all input channels to mono.
         for (int i = 0; i < numSamples; ++i)
-            monoBuffer_[static_cast<size_t> (i)] = (left[i] + right[i]) * 0.5f;
+        {
+            float sum = 0.0f;
+            for (int ch = 0; ch < numChannels; ++ch)
+                sum += buffer.getSample (ch, i);
+            monoBuffer_[static_cast<size_t> (i)] = sum / static_cast<float> (numChannels);
+        }
     }
 
     // ── Feed pYIN ─────────────────────────────────────────────────

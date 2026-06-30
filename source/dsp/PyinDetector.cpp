@@ -44,6 +44,18 @@ void PyinDetector::prepare (double sampleRate)
     viterbiFrames_.assign (kViterbiWindow, Frame{});
     viterbiWritePos_  = 0;
     viterbiFrameCount_ = 0;
+
+    // Reserve the candidate working buffer up front (prepareToPlay runs off
+    // the audio thread) so extractCandidates never reallocates during
+    // processBlock.  Collection is capped at kCandidateCapacity to honour this.
+    candidates_.clear();
+    candidates_.reserve (static_cast<size_t> (kCandidateCapacity));
+
+    // Zero the Viterbi scratch once; the forward pass overwrites every cell
+    // it reads each detection.
+    logObs_.fill (0.0);
+    logDelta_.fill (0.0);
+    stateCounts_.fill (0);
 }
 
 //==============================================================================
@@ -208,6 +220,12 @@ void PyinDetector::extractCandidates()
         if (std::abs (denom) > 1e-10f)        // guard near-zero denominator
             betterTau += (s2 - s0) / denom;
 
+        // Bound collection at the reserved capacity (see prepare) so the audio
+        // thread never reallocates.  Dips below the 0.15 threshold are sparse
+        // on real audio, so kCandidateCapacity (32) is comfortably ample.
+        if (static_cast<int> (candidates_.size()) >= kCandidateCapacity)
+            break;
+
         Candidate c;
         c.period       = static_cast<double> (betterTau);   // sub-sample period
         c.aperiodicity = static_cast<double> (s1);           // raw CMND at the dip
@@ -222,7 +240,6 @@ void PyinDetector::extractCandidates()
     // this bias the sort would be ambiguous.  The bias of ~0.01 (period 100) vs
     // ~0.04 (period 400) is negligible next to real aperiodicity differences
     // (~0.05–0.50) but breaks ties toward the fundamental.
-    constexpr int kMaxCandidates = 5;
     const auto rank = [] (const Candidate& x) { return x.aperiodicity + 1e-4 * x.period; };
 
     if (static_cast<int> (candidates_.size()) > kMaxCandidates)
@@ -291,21 +308,18 @@ void PyinDetector::extractCandidates()
 void PyinDetector::runViterbi()
 {
     // ── Build the current frame (from this detection's candidates) ────
+    // Copy into the frame's fixed-size array (no allocation).
     Frame frame;
-
-    // Copy candidates and accumulate the total voiced weight.
-    double totalVoicedW = 0.0;
-    for (const auto& c : candidates_)
-    {
-        totalVoicedW += std::max (0.0, 1.0 - c.aperiodicity);
-        frame.candidates.push_back (c);
-    }
+    const int numC = static_cast<int> (candidates_.size());
+    for (int i = 0; i < numC; ++i)
+        frame.candidates[i] = candidates_[static_cast<size_t> (i)];
+    frame.numCandidates = numC;
 
     // ── Unvoiced weight ──────────────────────────────────────────────
     // Computed from the best candidate's aperiodicity.  Maps 0.1 → 0.0
     // (very periodic → definitely voiced), 0.5 → 1.0 (noisy → unvoiced).
     frame.unvoicedWeight = 0.0;
-    if (! candidates_.empty())
+    if (numC > 0)
     {
         const double bestAp = candidates_.front().aperiodicity;
         frame.unvoicedWeight = std::max (0.0, std::min (1.0, (bestAp - 0.1) / 0.4));
@@ -313,7 +327,9 @@ void PyinDetector::runViterbi()
     else
     {
         // No candidates at all — the frame is certainly unvoiced.  Short-
-        // circuit the Viterbi (the output is already 0 Hz / ap=1).
+        // circuit the Viterbi (the output is already 0 Hz / ap=1).  The frame
+        // is intentionally NOT pushed into the window, so a silent stretch
+        // leaves the HMM history intact for a clean resume when sound returns.
         frame.unvoicedWeight = 1.0;
         detectedFreq_ = 0.0f;
         detectedAp_   = 1.0f;
@@ -321,7 +337,7 @@ void PyinDetector::runViterbi()
     }
 
     // ── Push frame into the circular Viterbi buffer ──────────────────
-    viterbiFrames_[static_cast<size_t> (viterbiWritePos_)] = std::move (frame);
+    viterbiFrames_[static_cast<size_t> (viterbiWritePos_)] = frame;
     viterbiWritePos_ = (viterbiWritePos_ + 1) % kViterbiWindow;
     if (viterbiFrameCount_ < kViterbiWindow)
         ++viterbiFrameCount_;
@@ -336,38 +352,33 @@ void PyinDetector::runViterbi()
     const auto& latestFrame = viterbiFrames_[static_cast<size_t> (latestIdx)];
 
     // ====================================================================
-    //  Log-observation probabilities  (one vector per frame)
-    //  logObs[frame][state] = log( P(observation | state) )
+    //  Log-observation probabilities  (pre-allocated scratch)
+    //  logObs_[i][s] = log( P(observation | state) ), flattened via cellIndex.
     // ====================================================================
-    std::vector<std::vector<double>> logObs (N);
-    std::vector<int> stateCounts (N);              // number of states per frame
-
     for (int i = 0; i < N; ++i)
     {
         const auto& f = viterbiFrames_[static_cast<size_t> (bufIdx (i))];
-        const int S = static_cast<int> (f.candidates.size()) + 1;  // voiced + unvoiced
-        stateCounts[i] = S;
+        const int S = f.numCandidates + 1;                       // voiced + unvoiced
+        stateCounts_[static_cast<size_t> (i)] = S;
 
         // Total weight across all states (for normalisation).
         double totalW = 0.0;
-        for (const auto& c : f.candidates)
-            totalW += std::max (0.0, 1.0 - c.aperiodicity);
+        for (int s = 0; s < f.numCandidates; ++s)
+            totalW += std::max (0.0, 1.0 - f.candidates[s].aperiodicity);
         totalW += f.unvoicedWeight;
         const double scale = 1.0 / std::max (totalW, 1e-12);
-
-        logObs[i].resize (S);
 
         // Voiced states (s = 0 … S−2).
         for (int s = 0; s < S - 1; ++s)
         {
-            const double w = std::max (0.0, 1.0 - f.candidates[size_t(s)].aperiodicity);
-            logObs[i][s] = std::log (std::max (w * scale, 1e-12))
-                           // ↓ fundamental-period prior: shorter periods win ties
-                         - 0.02 * (f.candidates[size_t(s)].period / static_cast<double> (maxPeriod_));
+            const double w = std::max (0.0, 1.0 - f.candidates[s].aperiodicity);
+            logObs_[cellIndex (i, s)] = std::log (std::max (w * scale, 1e-12))
+                                        // ↓ fundamental-period prior: shorter periods win ties
+                                      - 0.02 * (f.candidates[s].period / static_cast<double> (maxPeriod_));
         }
 
         // Unvoiced state (s = S−1).
-        logObs[i][S - 1] = std::log (std::max (f.unvoicedWeight * scale, 1e-12));
+        logObs_[cellIndex (i, S - 1)] = std::log (std::max (f.unvoicedWeight * scale, 1e-12));
     }
 
     // ====================================================================
@@ -387,28 +398,23 @@ void PyinDetector::runViterbi()
     constexpr double kInvTwoSigmaSq = 1.0 / (2.0 * kSigma * kSigma);
 
     // ====================================================================
-    //  Viterbi forward pass
+    //  Viterbi forward pass  (pre-allocated scratch: logDelta_[i][s])
     //
-    //  logDelta[i][s] = best log-probability of being in state s at frame i
-    //  psi[i][s]      = which state at frame i−1 led to this best path
+    //  logDelta_[i][s] = best log-probability of being in state s at frame i.
+    //  No backtracking pointers are stored — only the winning state at the
+    //  latest frame is needed, so the path is never reconstructed.
     // ====================================================================
-    std::vector<std::vector<double>> logDelta (N);
-    std::vector<std::vector<int>>    psi       (N);
 
     // ── Frame 0: initialise with observation log-probs only ──────────
     // No transition from a previous frame.
-    logDelta[0].assign (stateCounts[0], 0.0);
-    psi      [0].assign (stateCounts[0], 0);
-    for (int s = 0; s < stateCounts[0]; ++s)
-        logDelta[0][s] = logObs[0][s];
+    for (int s = 0; s < stateCounts_[0]; ++s)
+        logDelta_[cellIndex (0, s)] = logObs_[cellIndex (0, s)];
 
     // ── Frames 1 … N−1: dynamic programming recursion ───────────────
     for (int i = 1; i < N; ++i)
     {
-        const int S  = stateCounts[i];       // states in this frame
-        const int Sp = stateCounts[i - 1];   // states in the previous frame
-        logDelta[i].resize (S);
-        psi[i].resize (S);
+        const int S  = stateCounts_[i];       // states in this frame
+        const int Sp = stateCounts_[i - 1];   // states in the previous frame
 
         const auto& prev = viterbiFrames_[static_cast<size_t> (bufIdx (i - 1))];
         const auto& curr = viterbiFrames_[static_cast<size_t> (bufIdx (i))];
@@ -416,7 +422,6 @@ void PyinDetector::runViterbi()
         for (int s = 0; s < S; ++s)
         {
             double best = -1e30;     // log(0) — impossibly bad
-            int    bestP = 0;
             const bool sUnv = (s == S - 1);     // is current state unvoiced?
 
             // Try every previous state as a predecessor.
@@ -435,34 +440,32 @@ void PyinDetector::runViterbi()
                 else
                 {
                     // Both voiced — Gaussian penalty on log-period change
-                    const double d = std::log (curr.candidates[size_t(s)].period)
-                                   - std::log (prev.candidates[size_t(sp)].period);
+                    const double d = std::log (curr.candidates[s].period)
+                                   - std::log (prev.candidates[sp].period);
                     trans = -d * d * kInvTwoSigmaSq;
                 }
 
-                const double val = logDelta[i - 1][sp] + trans;
-                if (val > best) { best = val; bestP = sp; }
+                const double val = logDelta_[cellIndex (i - 1, sp)] + trans;
+                if (val > best) best = val;
             }
 
             // Best predecessor found — store the DP cell.
-            logDelta[i][s] = best + logObs[i][s];
-            psi[i][s]      = bestP;
+            logDelta_[cellIndex (i, s)] = best + logObs_[cellIndex (i, s)];
         }
     }
 
     // ====================================================================
     //  Decision — pick the best state at the latest frame.
-    //  We only need the winning state; the full backtrack path is irrelevant
-    //  because Viterbi re-runs from scratch every detection.  The latest
-    //  frame's best state determines this detection's output pitch.
+    //  Only the winning state matters; the full path is irrelevant because
+    //  Viterbi re-runs from scratch every detection.
     // ====================================================================
-    const int SL = stateCounts[N - 1];
+    const int SL = stateCounts_[N - 1];
     int bestS = 0;
     double bestVal = -1e30;
     for (int s = 0; s < SL; ++s)
     {
-        if (logDelta[N - 1][s] > bestVal)
-        { bestVal = logDelta[N - 1][s]; bestS = s; }
+        if (logDelta_[cellIndex (N - 1, s)] > bestVal)
+        { bestVal = logDelta_[cellIndex (N - 1, s)]; bestS = s; }
     }
 
     // ── Produce the output ─────────────────────────────────────────
@@ -474,7 +477,7 @@ void PyinDetector::runViterbi()
     }
     else
     {
-        const auto& c = latestFrame.candidates[size_t(bestS)];
+        const auto& c = latestFrame.candidates[bestS];
         detectedFreq_ = static_cast<float> (fs_ / c.period);
         detectedAp_   = static_cast<float> (c.aperiodicity);
     }
