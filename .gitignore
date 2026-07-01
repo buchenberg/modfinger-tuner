@@ -1,5 +1,6 @@
 # --- Build Artifacts (CMake & JUCE) ---
 build/
+build-nmake/
 CMakeFiles/
 CTestTestfile.cmake
 installer/
